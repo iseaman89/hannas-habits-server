@@ -1,0 +1,33 @@
+@page "/users/login"
+@inject IAuthenticationService _authService
+@inject NavigationManager _navManager
+
+<MudContainer Class="center-image">
+        <MudContainer Class="center-image">
+            <MudImage
+                ObjectPosition="ObjectPosition.Center"
+                Height="150"
+                Width="300"
+                Src="img/spie-logo.jpg"
+                Class="rounded-lg"
+                Style="margin-top: 20px;"/>
+            <MudText Typo="Typo.h4" Class="description">License plates data table</MudText>
+        </MudContainer>
+        <MudContainer Class="center-content">
+            <MudPaper Style="width: 300px; padding: 20px; margin-top: 20px" Elevation="4">
+                <EditForm Model="_loginModel" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator/>
+                    <ValidationSummary/>
+                    <MudTextField T="string" Label="Username" @bind-Value="_loginModel.UserEmail" Required="true" FullWidth="true" Margin="Margin.Dense" Variant="Variant.Filled"/>
+                    <ValidationMessage For="@(() => _loginModel.UserEmail)"/>
+                    <MudTextField T="string" Label="Password" @bind-Value="_loginModel.Password" InputType="InputType.Password" Required="true" FullWidth="true" Margin="Margin.Dense" Variant="Variant.Filled"/>
+                    <ValidationMessage For="@(() => _loginModel.Password)"/>
+                    @if (!string.IsNullOrEmpty(_message))
+                    {
+                    <MudAlert Severity="Severity.Error" Elevation="2">@_message</MudAlert>
+                    }
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Success" Class="mt-3" FullWidth="true">Login</MudButton>
+                </EditForm>
+            </MudPaper>
+        </MudContainer>
+</MudContainer>

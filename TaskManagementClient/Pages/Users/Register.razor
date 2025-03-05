@@ -1,0 +1,37 @@
+@page "/users/register"
+
+<h3>Register new User</h3>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert alert-danger">
+        <p>@_message</p>
+    </div>
+}
+<div class="card-body">
+    <EditForm Model="_registrationModel" OnValidSubmit="HandleRegistration">
+        <DataAnnotationsValidator/>
+        <ValidationSummary/>
+        <div class="form-group">
+            <label for="user">User email</label>
+            <InputText class="form-control" @bind-Value="_registrationModel.UserEmail"></InputText>
+            <ValidationMessage For="@(() => _registrationModel.UserEmail)"></ValidationMessage>
+        </div>
+        <div class="form-group">
+            <label for="user">First name</label>
+            <InputText class="form-control" @bind-Value="_registrationModel.FirstName"></InputText>
+            <ValidationMessage For="@(() => _registrationModel.FirstName)"></ValidationMessage>
+        </div>
+        <div class="form-group">
+            <label for="user">Last name</label>
+            <InputText class="form-control" @bind-Value="_registrationModel.LastName"></InputText>
+            <ValidationMessage For="@(() => _registrationModel.LastName)"></ValidationMessage>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <InputText class="form-control" type="password" @bind-Value="_registrationModel.Password"></InputText>
+            <ValidationMessage For="@(() => _registrationModel.Password)"></ValidationMessage>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Register</button>
+    </EditForm>
+</div>

@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UserService", "UserService\UserService.csproj", "{2C239E7A-C1B9-4AFF-864D-188A836E9BA0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HannaHabitsService", "HannaHabitsService\HannaHabitsService.csproj", "{E7B32806-5E6F-4798-B42A-2538D007E4EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HannasHabits.Data.Shared", "HannasHabits.Data.Shared\HannasHabits.Data.Shared.csproj", "{43F00A73-E8F9-42D7-AE0A-1680B2267B55}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2C239E7A-C1B9-4AFF-864D-188A836E9BA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C239E7A-C1B9-4AFF-864D-188A836E9BA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C239E7A-C1B9-4AFF-864D-188A836E9BA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C239E7A-C1B9-4AFF-864D-188A836E9BA0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7B32806-5E6F-4798-B42A-2538D007E4EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7B32806-5E6F-4798-B42A-2538D007E4EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7B32806-5E6F-4798-B42A-2538D007E4EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7B32806-5E6F-4798-B42A-2538D007E4EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43F00A73-E8F9-42D7-AE0A-1680B2267B55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43F00A73-E8F9-42D7-AE0A-1680B2267B55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43F00A73-E8F9-42D7-AE0A-1680B2267B55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43F00A73-E8F9-42D7-AE0A-1680B2267B55}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+	EndGlobalSection
+EndGlobal

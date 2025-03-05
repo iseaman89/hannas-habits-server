@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AutoMapper" Version="13.0.1" />
+        <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.6" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.2"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.2" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.RazorPages" Version="2.2.5" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0-preview.5.24306.7" />
+        <PackageReference Include="MudBlazor" Version="7.0.0" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3-beta1" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.6.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\TaskManagmentSystem.Data.Shared\TaskManagmentSystem.Data.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Layout\MainLayout.razor" />
+      <_ContentIncludedByDefault Remove="Layout\NavMenu.razor" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Pages\Tasks\Update.cs">
+        <DependentUpon>Update.razor</DependentUpon>
+      </Compile>
+      <Compile Update="Pages\Users\Login.cs">
+        <DependentUpon>Login.razor</DependentUpon>
+      </Compile>
+      <Compile Update="Pages\Users\Logout.cs">
+        <DependentUpon>Logout.razor</DependentUpon>
+      </Compile>
+      <Compile Update="Pages\Users\Register.cs">
+        <DependentUpon>Register.razor</DependentUpon>
+      </Compile>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,50 @@
+@page "/tasks/"
+
+<h3>Index</h3>
+
+@if (_response.Success == false)
+{
+<div class="alert alert-danger">
+    <h4>@_response.Message</h4>
+</div>
+}
+@if (_tasks == null)
+{
+    <div class="alert alert-info">
+        <h4>Loading data...</h4>
+    </div>
+}
+else
+{
+    <AuthorizeView Roles=@Roles.Administartor>
+        <a class="btn btn-dark" href="/cameras/create"><span class="oi oi-plus" aria-hidden="true"></span>Create</a>
+    </AuthorizeView>
+    <br/>
+    <table class="table table-responsive">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Login</th>
+            <th>Password</th>
+            <th>Ip address</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var task in _tasks)
+        {
+            <tr>
+                <td>@task.Title</td>
+                <td>@task.Title</td>
+                <td>@task.Title</td>
+                <td>@task.Title</td>
+                <td>
+                    <AuthorizeView Roles=@Roles.Administartor>
+                        <a class="btn btn-warning" href="/license-plates/update/@task.Id"><span class="oi oi-pencil" aria-hidden="true"></span>Edit</a>
+                        <button class="btn btn-danger" @onclick="() => Delete(task.Id)"><span class="oi oi-delete" aria-hidden="true"></span>Delete</button>
+                    </AuthorizeView>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
