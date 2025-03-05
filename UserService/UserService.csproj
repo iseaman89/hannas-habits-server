@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>d0800335-74b7-4587-a0a0-9fbab440a619</UserSecretsId>
         <PreserveCompilationContext>true</PreserveCompilationContext>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
 
     <ItemGroup>
@@ -25,6 +26,12 @@
         <PackageReference Include="Serilog.AspNetCore" Version="8.0.2-dev-00338" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0"/>
         <PackageReference Include="System.Security.Claims" Version="4.3.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
     </ItemGroup>
 
 </Project>
