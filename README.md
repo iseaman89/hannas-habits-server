@@ -26,9 +26,9 @@ It contains two independent ASP.NET Core Web API services:
 
 ## ⚙️ Technologies Used
 
-- ASP.NET Core 7 (Web API)
+- ASP.NET Core 8 (Web API)
 - Entity Framework Core
-- PostgreSQL (separate DB per service)
+- PostgreSQL 
 - JWT Authentication
 - Swagger (enabled in both services)
 - Docker & Docker Compose
@@ -89,8 +89,6 @@ dotnet run
 /Controllers      → API endpoints
 /Models           → Entity and DTO definitions
 /Data             → EF DbContext & Migrations
-/Services         → Core business logic
-/Helpers          → Utility classes (e.g., JWT, config)
 ```
 
 ---
