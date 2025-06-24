@@ -1,83 +1,104 @@
-# Hanna's Habits – Backend 🧠
 
-This is the **backend** of the fullstack project *Hanna’s Habits* – a habit-tracking and journaling web app built with .NET and React.
+# Hanna's Habits – Backend (Microservices) 🧠
+
+This is the **backend** of the fullstack project *Hanna’s Habits* – structured as a microservice architecture using .NET Core.
+
+It contains two independent ASP.NET Core Web API services:
+
+| Service           | Description                                          |
+|------------------|------------------------------------------------------|
+| 🧑‍💼 User Service     | Handles authentication, JWT tokens, and user management |
+| 📘 Habits Service   | Manages habit tracking and journaling features     |
 
 🔗 **Frontend repository**: [hannas-habits-frontend](https://github.com/iseaman89/hannas-habits-ui)  
 🔗 **Main project overview**: [hannas-habits](https://github.com/iseaman89/hannas-habits)
 
 ---
 
-## ⚙️ Stack
+## 🧱 Project Structure
 
-- ASP.NET Core 8 (Web API)
-- Entity Framework Core
-- PostgreSQL
-- JWT Authentication
-- Swagger for API documentation
-- Docker support
-
----
-
-## 🚀 Running the API
-
-### 🧪 Local development
-
-#### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download)
-- PostgreSQL (local or via Docker)
-
-#### Steps
-
-```bash
-git clone https://github.com/iseaman89/hannas-habits-server.git
-cd hannas-habits-server
-
-# Set up your connection string and JWT secret in appsettings.json or environment variables
-
-dotnet ef database update     # apply migrations
-dotnet run                    # run the API
+```
+/user-service         → ASP.NET Core service for user management & auth
+/habits-service       → ASP.NET Core service for habits & journals
+/docker-compose.yml   → Container setup for both services & PostgreSQL
 ```
 
-Access Swagger UI at:  
-👉 `http://localhost:5000/swagger` *(or configured port)*
+---
+
+## ⚙️ Technologies Used
+
+- ASP.NET Core 7 (Web API)
+- Entity Framework Core
+- PostgreSQL (separate DB per service)
+- JWT Authentication
+- Swagger (enabled in both services)
+- Docker & Docker Compose
 
 ---
 
-### 🐳 With Docker
+## 🚀 Running Locally
+
+### 🐳 Using Docker Compose (Recommended)
 
 ```bash
 docker-compose up --build
 ```
 
-*Ensure your `docker-compose.yml` contains PostgreSQL and backend services with proper ports and env variables.*
+This will:
+- Build and run both services (`user-service`, `habits-service`)
+- Start PostgreSQL containers for each service
+- Expose APIs on different ports (configure in `docker-compose.yml`)
+
+Once running:
+
+- User Service Swagger: [http://localhost:5001/swagger](http://localhost:5001/swagger)
+- Habits Service Swagger: [http://localhost:5002/swagger](http://localhost:5002/swagger)
+
+> ⚠️ Make sure ports and environment variables match the ones defined in each service's `appsettings.json` or `.env` file.
 
 ---
 
-## 🧰 Features
+## 🧪 Manual Run
 
-- ✅ Secure JWT-based auth with refresh tokens
-- ✅ Custom user roles and access protection
-- ✅ Habit creation, update, delete per user
-- ✅ Journaling with timestamps
-- ✅ Swagger UI for testing endpoints
+You can also run each service separately:
+
+```bash
+cd user-service
+dotnet ef database update
+dotnet run
+```
+
+```bash
+cd habits-service
+dotnet ef database update
+dotnet run
+```
 
 ---
 
-## 📁 Project Structure
+## 🔐 Authentication
+
+- JWT-based auth is implemented in the **User Service**
+- The **Habits Service** expects a valid JWT token in requests
+- Token validation middleware is used for protected routes
+
+---
+
+## 📁 Each Service Contains:
 
 ```
 /Controllers      → API endpoints
-/Models           → Entity & DTO classes
-/Data             → EF DbContext & migrations
-/Services         → Business logic & dependency injection
-/Helpers          → JWT utils, settings
+/Models           → Entity and DTO definitions
+/Data             → EF DbContext & Migrations
+/Services         → Core business logic
+/Helpers          → Utility classes (e.g., JWT, config)
 ```
 
 ---
 
 ## 🧑‍💻 Author
 
-**Yevgen Panych** – Umschüler zum Fachinformatiker AE  
+**Yevgen Panych** – Umschüler zum Fachinformatiker AE
 
 📫 [LinkedIn](https://www.linkedin.com/in/yevgen-panych)  
 🌐 [Portfolio](https://panych.site)
