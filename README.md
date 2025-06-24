@@ -20,7 +20,6 @@ It contains two independent ASP.NET Core Web API services:
 ```
 /user-service         → ASP.NET Core service for user management & auth
 /habits-service       → ASP.NET Core service for habits & journals
-/docker-compose.yml   → Container setup for both services & PostgreSQL
 ```
 
 ---
