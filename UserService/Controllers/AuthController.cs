@@ -1,11 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Text.Json;
 using AutoMapper;
 using Google.Apis.Auth;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -40,7 +37,7 @@ namespace UserService.Controllers
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
-            _logger.LogInformation($"Registration Attempt for {userDto.Email} ");
+            _logger.LogInformation("Registration Attempt for {Take}******", userDto.Email.Take(3));
             try
             {
                 var user = _mapper.Map<ApiUser>(userDto);
@@ -57,7 +54,7 @@ namespace UserService.Controllers
                     return BadRequest(ModelState);
                 }
 
-                await _userManager.AddToRoleAsync(user, "User");
+                await _userManager.AddToRoleAsync(user, Roles.User);
                 return Accepted();
             }
             catch (Exception ex)
@@ -71,16 +68,13 @@ namespace UserService.Controllers
         [Route("login")]
         public async Task<ActionResult<AuthResponse>> Login(LoginUserDto userDto)
         {
-            _logger.LogInformation($"Login Attempt for {userDto.Email} ");
+            _logger.LogInformation("Login Attempt for {UserDtoEmail}********", userDto.Email.Take(3));
             try
             {
                 var user = await _userManager.FindByEmailAsync(userDto.Email);
+                if (user == null) return Unauthorized("Wrong email or password");
                 var passwordValid = await _userManager.CheckPasswordAsync(user, userDto.Password);
-
-                if (user == null || passwordValid == false)
-                {
-                    return Unauthorized("Wrong email or password");
-                }
+                if (passwordValid == false) return Unauthorized("Wrong email or password");
 
                 var tokenString = await GenerateToken(user);
 
@@ -107,8 +101,7 @@ namespace UserService.Controllers
             try
             {
                 var payload = await VerifyGoogleToken(request.Token);
-                if (payload == null)
-                    return BadRequest("Недійсний токен Google");
+                if (payload == null) return BadRequest("Недійсний токен Google");
                 
                 var user = await _userManager.FindByEmailAsync(payload.Email);
                 if (user == null)
@@ -125,7 +118,7 @@ namespace UserService.Controllers
                     if (!result.Succeeded)
                         return BadRequest(result.Errors);
             
-                    await _userManager.AddToRoleAsync(user, "User");
+                    await _userManager.AddToRoleAsync(user, Roles.User);
                 }
                 
                 var token = await GenerateToken(user);

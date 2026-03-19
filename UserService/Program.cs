@@ -35,7 +35,7 @@ builder.Host.UseSerilog((ctx, lc) =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSpecificOrigins", b =>
-        b.WithOrigins("http://localhost:5173", "https://accounts.google.com")
+        b.WithOrigins("http://localhost:5173", "http://localhost:5174", "https://accounts.google.com")
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials());
