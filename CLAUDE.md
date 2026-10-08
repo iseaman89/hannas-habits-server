@@ -24,7 +24,7 @@ The frontend is a separate git repo outside this working directory. Add it with 
 
 ## Backend architecture
 
-Solution `HannasHabits.sln` = 4 projects, dependency rule points inwards:
+Solution `HannasHabits.sln` = 4 production projects (dependency rule points inwards) + 4 test projects (below):
 
 ```
 WebApi ──► Application ──► Domain
@@ -37,6 +37,8 @@ WebApi ──► Application ──► Domain
 - `HannasHabits.WebApi` — controllers (thin: only `IMediator.Send`), composition root (`Program.cs`).
 
 Every query/command filters by the current user's id (data isolation) — keep this.
+
+Tests (xunit, **no mocking library**: hand-written in-memory fakes, xunit's own `Assert`): `HannasHabits.Domain.Tests` (pure unit tests), `HannasHabits.Application.Tests` (handlers/validators/pipeline against fakes), `HannasHabits.Architecture.Tests` (NetArchTest + reflection rules for the layers), `HannasHabits.Integration.Tests` (the real app via `WebApplicationFactory<Program>` on a real PostgreSQL in a Testcontainers container — **Docker must be running**; one container per run, a migrated template database copied per use, tests keep apart by user). A new use case gets: Domain test for its rule, handler test with fakes, validator test, API test (incl. isolation between two users), and — if it writes concurrently — a forced-race test (`RaceUnitOfWork` + `Barrier`).
 
 Decision: persistence goes through **repositories** (one per aggregate root; interfaces in Application, implementations in Infrastructure) instead of handlers using a DbContext directly (done in B3; the read side uses small query interfaces that project to DTOs). Application has no EF Core reference.
 
@@ -65,6 +67,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b
 ```bash
 dotnet build HannasHabits.sln
 dotnet run --project HannasHabits.WebApi          # http://localhost:5016, https://localhost:7054, Swagger at /swagger
+dotnet test HannasHabits.sln                      # ~35 s; needs Docker (an old engine is handled, see TestEnvironment)
 dotnet ef migrations add <Name> -p HannasHabits.Infrastructure -s HannasHabits.WebApi
 dotnet ef database update -p HannasHabits.Infrastructure -s HannasHabits.WebApi
 # frontend (in its own repo): npm run dev | npm run build | npm run lint
