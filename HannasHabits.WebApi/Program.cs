@@ -1,6 +1,7 @@
 using HannasHabits.Application;
 using HannasHabits.Infrastructure;
 using HannasHabits.WebApi;
+using HannasHabits.WebApi.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,8 @@ builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddWebApi(builder.Configuration);
 
 var app = builder.Build();
+
+await app.ApplyMigrationsIfConfiguredAsync();
 
 // First, so it also catches exceptions thrown by everything below.
 app.UseExceptionHandler();

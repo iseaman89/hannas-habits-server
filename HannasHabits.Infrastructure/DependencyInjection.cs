@@ -46,8 +46,17 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<RefreshTokenCleanupOptions>()
+            .Bind(configuration.GetSection(RefreshTokenCleanupOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Injected wherever "now" matters, so tests can control the clock.
         services.AddSingleton(TimeProvider.System);
+
+        // Expired refresh tokens are deleted in the background (at startup, then periodically).
+        services.AddScoped<RefreshTokenCleaner>();
+        services.AddHostedService<RefreshTokenCleanupService>();
 
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
