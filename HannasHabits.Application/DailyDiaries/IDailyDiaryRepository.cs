@@ -8,12 +8,11 @@ namespace HannasHabits.Application.DailyDiaries;
 /// </summary>
 public interface IDailyDiaryRepository
 {
-    Task<DailyDiary?> GetByIdAsync(Guid userId, Guid diaryId, CancellationToken cancellationToken);
-
-    /// <summary>Whether the user already has a diary entry for that day.</summary>
-    Task<bool> ExistsForDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken);
+    /// <summary>The user's entry for that day, or <c>null</c> if there is none.</summary>
+    Task<DailyDiary?> GetByDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken);
 
     void Add(DailyDiary dailyDiary);
 
+    /// <summary>Removes a stored entry; for one that was only added (and not saved) it just forgets it again.</summary>
     void Remove(DailyDiary dailyDiary);
 }

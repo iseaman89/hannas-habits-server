@@ -1,7 +1,7 @@
-using HannasHabits.Application.DailyDiaries.Commands.CreateDailyDiary;
 using HannasHabits.Application.DailyDiaries.Commands.DeleteDailyDiary;
-using HannasHabits.Application.DailyDiaries.Queries.GetAllDailyDiaries;
-using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryById;
+using HannasHabits.Application.DailyDiaries.Commands.SaveDailyDiary;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryByDate;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryDays;
 using HannasHabits.WebApi.Models;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HannasHabits.WebApi.Controllers;
 
-// Routes are keyed by id for now; B6 redesigns the diary API around the date.
+/// <summary>The diary is one document per user and day; the date is its key, so clients never handle ids.</summary>
 [Authorize]
 [ApiController]
 [Route("api/daily-diaries")]
@@ -23,50 +23,47 @@ public class DailyDiariesController : ControllerBase
         _mediator = mediator;
     }
 
+    /// <summary>Days that have an entry, oldest first, with their mood (for the calendar). <c>from</c>/<c>to</c> are inclusive and optional.</summary>
     [HttpGet]
-    public async Task<ActionResult<List<DailyDiaryListItemDto>>> GetDailyDiaries(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<DailyDiaryDayDto>>> GetDays(
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
-        var dailyDiaries = await _mediator.Send(new GetAllDailyDiariesQuery(), cancellationToken);
-        return Ok(dailyDiaries);
+        var days = await _mediator.Send(new GetDailyDiaryDaysQuery(from, to), cancellationToken);
+        return Ok(days);
     }
 
-    [HttpGet("{id}")]
+    /// <summary>The entry of a day. 404 means nothing is written for that day yet.</summary>
+    [HttpGet("{date}")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<DailyDiaryDetailsDto>> GetDailyDiaryById(Guid id,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<DailyDiaryDto>> GetByDate(DateOnly date, CancellationToken cancellationToken)
     {
-        var dailyDiary = await _mediator.Send(new GetDailyDiaryByIdQuery(id), cancellationToken);
+        var dailyDiary = await _mediator.Send(new GetDailyDiaryByDateQuery(date), cancellationToken);
         return Ok(dailyDiary);
     }
 
-    /// <summary>Creates the entry of a day. Answers 409 if the user already has an entry for that day.</summary>
-    [HttpPost]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<CreateDailyDiaryDto>> CreateDailyDiary(CreateDailyDiaryRequest request,
-        CancellationToken cancellationToken)
-    {
-        var dailyDiary = await _mediator.Send(request.ToCommand(), cancellationToken);
-        return CreatedAtAction(nameof(GetDailyDiaryById), new { id = dailyDiary.Id }, dailyDiary);
-    }
-
-    [HttpPut("{id}")]
+    /// <summary>
+    /// Saves the whole entry of a day (creates or replaces it; idempotent, the last write wins). An entry that contains
+    /// nothing is removed instead of stored. No body is returned: the client keeps its own copy while it is typing.
+    /// </summary>
+    [HttpPut("{date}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateDailyDiary(Guid id, UpdateDailyDiaryRequest request,
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Save(DateOnly date, SaveDailyDiaryRequest request,
         CancellationToken cancellationToken)
     {
-        await _mediator.Send(request.ToCommand(id), cancellationToken);
+        await _mediator.Send(request.ToCommand(date), cancellationToken);
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{date}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteDailyDiary(Guid id, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(DateOnly date, CancellationToken cancellationToken)
     {
-        await _mediator.Send(new DeleteDailyDiaryCommand(id), cancellationToken);
+        await _mediator.Send(new DeleteDailyDiaryCommand(date), cancellationToken);
         return NoContent();
     }
 }

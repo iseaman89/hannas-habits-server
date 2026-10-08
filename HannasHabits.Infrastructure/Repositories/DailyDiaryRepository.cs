@@ -14,15 +14,12 @@ public class DailyDiaryRepository : IDailyDiaryRepository
         _context = context;
     }
 
-    public Task<DailyDiary?> GetByIdAsync(Guid userId, Guid diaryId, CancellationToken cancellationToken)
+    public Task<DailyDiary?> GetByDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken)
         => _context.DailyDiaries
-            .FirstOrDefaultAsync(d => d.Id == diaryId && d.UserId == userId, cancellationToken);
-
-    public Task<bool> ExistsForDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken)
-        => _context.DailyDiaries
-            .AnyAsync(d => d.UserId == userId && d.Date == date, cancellationToken);
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.Date == date, cancellationToken);
 
     public void Add(DailyDiary dailyDiary) => _context.DailyDiaries.Add(dailyDiary);
 
+    // For an entry that was only added (its insert failed), EF Core just stops tracking it.
     public void Remove(DailyDiary dailyDiary) => _context.DailyDiaries.Remove(dailyDiary);
 }

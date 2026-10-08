@@ -73,8 +73,19 @@ public class GlobalExceptionHandler : IExceptionHandler
 
     // Keys are camelCased like the JSON properties of the request, so a client can map them to form fields.
     private static Dictionary<string, string[]> GroupErrors(ValidationException exception) => exception.Errors
-        .GroupBy(failure => JsonNamingPolicy.CamelCase.ConvertName(failure.PropertyName))
+        .GroupBy(failure => CamelCasePath(failure.PropertyName))
         .ToDictionary(
             group => group.Key,
             group => group.Select(failure => failure.ErrorMessage).Distinct().ToArray());
+
+    // "Tasks[0].Title" -> "tasks[0].title": every segment of a nested path is a property name, not only the first.
+    private static string CamelCasePath(string propertyPath) => string.Join('.', propertyPath
+        .Split('.')
+        .Select(segment =>
+        {
+            var indexer = segment.IndexOf('[');
+            return indexer < 0
+                ? JsonNamingPolicy.CamelCase.ConvertName(segment)
+                : JsonNamingPolicy.CamelCase.ConvertName(segment[..indexer]) + segment[indexer..];
+        }));
 }

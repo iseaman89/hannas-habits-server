@@ -1,6 +1,6 @@
 using HannasHabits.Application.DailyDiaries;
-using HannasHabits.Application.DailyDiaries.Queries.GetAllDailyDiaries;
-using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryById;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryByDate;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryDays;
 using HannasHabits.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,17 +15,37 @@ public class DailyDiaryQueries : IDailyDiaryQueries
         _context = context;
     }
 
-    public Task<List<DailyDiaryListItemDto>> GetAllAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task<DailyDiaryDto?> GetByDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken)
+    {
+        // The lists are converted columns (text[] / jsonb): SQL cannot look inside them, so the query loads the plain
+        // columns and the DTO is built from them in memory.
+        var entry = await _context.DailyDiaries
+            .AsNoTracking()
+            .Where(d => d.UserId == userId && d.Date == date)
+            .Select(d => new { d.Date, d.Mood, d.Body, d.Mind, d.Highlight, d.Grateful, d.Learned, d.Tasks })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return entry is null
+            ? null
+            : new DailyDiaryDto(
+                entry.Date,
+                entry.Mood,
+                entry.Body?.Value,
+                entry.Mind?.Value,
+                entry.Highlight,
+                entry.Grateful,
+                entry.Learned,
+                entry.Tasks.Select(task => new DiaryTaskDto(task.Title, task.Done)).ToList());
+    }
+
+    public Task<List<DailyDiaryDayDto>> GetDaysAsync(
+        Guid userId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
         => _context.DailyDiaries
             .AsNoTracking()
             .Where(d => d.UserId == userId)
-            .Select(d => new DailyDiaryListItemDto(d.Id, d.Date, d.Text))
+            .Where(d => from == null || d.Date >= from)
+            .Where(d => to == null || d.Date <= to)
+            .OrderBy(d => d.Date)
+            .Select(d => new DailyDiaryDayDto(d.Date, d.Mood))
             .ToListAsync(cancellationToken);
-
-    public Task<DailyDiaryDetailsDto?> GetByIdAsync(Guid userId, Guid diaryId, CancellationToken cancellationToken)
-        => _context.DailyDiaries
-            .AsNoTracking()
-            .Where(d => d.Id == diaryId && d.UserId == userId)
-            .Select(d => new DailyDiaryDetailsDto(d.Id, d.Date, d.Text))
-            .FirstOrDefaultAsync(cancellationToken);
 }

@@ -20,9 +20,10 @@ public class DeleteDailyDiaryCommandHandler : IRequestHandler<DeleteDailyDiaryCo
 
     public async Task<Unit> Handle(DeleteDailyDiaryCommand request, CancellationToken cancellationToken)
     {
-        var dailyDiary = await _dailyDiaries.GetByIdAsync(_currentUser.UserId, request.Id, cancellationToken);
+        var dailyDiary = await _dailyDiaries.GetByDateAsync(_currentUser.UserId, request.Date, cancellationToken);
 
-        if (dailyDiary is null) throw new NotFoundException(nameof(DailyDiary), request.Id);
+        if (dailyDiary is null)
+            throw new NotFoundException(nameof(DailyDiary), request.Date.ToString("O"));
 
         _dailyDiaries.Remove(dailyDiary);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

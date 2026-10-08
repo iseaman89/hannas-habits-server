@@ -101,34 +101,35 @@ Authorization: Bearer {{accessToken}}
 DELETE {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 
-### Create a diary entry - 201 + Location header; 409 if there already is one for that day (B6 will key the diary by date)
-POST {{host}}/api/daily-diaries
+### Save the diary entry of a day - 204. One document per user+date: creates or replaces it (idempotent, last write wins).
+### Everything left out is cleared. mood 1 (rough) - 5 (great), body/mind 0-100. A completely empty document removes the entry.
+PUT {{host}}/api/daily-diaries/{{date}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "date": "{{date}}", "text": "A good day." }
+{
+  "mood": 4,
+  "body": 70,
+  "mind": 55,
+  "highlight": "A good day.",
+  "grateful": ["Coffee", "Sunshine"],
+  "learned": ["Waiting pays off"],
+  "tasks": [
+    { "title": "Call mum", "done": true },
+    { "title": "Write the report", "done": false }
+  ]
+}
 
-> {%
-    client.global.set("diaryId", response.body.id);
-%}
-
-### List diary entries
-GET {{host}}/api/daily-diaries
+### Get the entry of a day - 200; 404 = nothing written for that day yet
+GET {{host}}/api/daily-diaries/{{date}}
 Authorization: Bearer {{accessToken}}
 
-### Get one diary entry
-GET {{host}}/api/daily-diaries/{{diaryId}}
+### Days with an entry and their mood, oldest first (calendar) - from/to inclusive and optional
+GET {{host}}/api/daily-diaries?from=2026-01-01&to=2026-12-31
 Authorization: Bearer {{accessToken}}
 
-### Update a diary entry - 204
-PUT {{host}}/api/daily-diaries/{{diaryId}}
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
-
-{ "text": "A really good day." }
-
-### Delete a diary entry - 204
-DELETE {{host}}/api/daily-diaries/{{diaryId}}
+### Delete the entry of a day - 204; 404 if there is none
+DELETE {{host}}/api/daily-diaries/{{date}}
 Authorization: Bearer {{accessToken}}
 
 ### Revoke one refresh token (logout of this session) - 204, also for unknown / already revoked tokens

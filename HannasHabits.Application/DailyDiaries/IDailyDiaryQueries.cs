@@ -1,5 +1,5 @@
-using HannasHabits.Application.DailyDiaries.Queries.GetAllDailyDiaries;
-using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryById;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryByDate;
+using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryDays;
 
 namespace HannasHabits.Application.DailyDiaries;
 
@@ -9,8 +9,9 @@ namespace HannasHabits.Application.DailyDiaries;
 /// </summary>
 public interface IDailyDiaryQueries
 {
-    Task<List<DailyDiaryListItemDto>> GetAllAsync(Guid userId, CancellationToken cancellationToken);
+    /// <summary><c>null</c> if the user has no entry for that day.</summary>
+    Task<DailyDiaryDto?> GetByDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken);
 
-    /// <summary><c>null</c> if the diary does not exist or belongs to another user.</summary>
-    Task<DailyDiaryDetailsDto?> GetByIdAsync(Guid userId, Guid diaryId, CancellationToken cancellationToken);
+    /// <summary>The days with an entry and their mood, oldest first. <paramref name="from"/>/<paramref name="to"/> are inclusive and optional.</summary>
+    Task<List<DailyDiaryDayDto>> GetDaysAsync(Guid userId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken);
 }
