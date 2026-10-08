@@ -18,6 +18,10 @@ public class DailyDiaryRepository : IDailyDiaryRepository
         => _context.DailyDiaries
             .FirstOrDefaultAsync(d => d.Id == diaryId && d.UserId == userId, cancellationToken);
 
+    public Task<bool> ExistsForDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken)
+        => _context.DailyDiaries
+            .AnyAsync(d => d.UserId == userId && d.Date == date, cancellationToken);
+
     public void Add(DailyDiary dailyDiary) => _context.DailyDiaries.Add(dailyDiary);
 
     public void Remove(DailyDiary dailyDiary) => _context.DailyDiaries.Remove(dailyDiary);

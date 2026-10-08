@@ -26,8 +26,11 @@ public class UnmarkCompletedCommandHandler : IRequestHandler<UnmarkCompletedComm
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.HabitId);
 
-        if (!habit.UnmarkCompleted(request.Date))
+        // The Domain only allows taking back a completed day; for the API an unmarked day is a missing resource (404).
+        if (habit.RecordOn(request.Date) is null)
             throw new NotFoundException(nameof(HabitRecord), request.Date.ToString("O"));
+
+        habit.UnmarkCompleted(request.Date);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

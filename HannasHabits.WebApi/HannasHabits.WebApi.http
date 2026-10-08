@@ -43,11 +43,12 @@ Content-Type: application/json
 %}
 
 ### Create a habit - 201 + Location header
+# schedule = planned days of the week (0 = Sunday ... 6 = Saturday); omit it for "every day".
 POST {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "title": "Read 20 pages", "description": "Before bed" }
+{ "title": "Read 20 pages", "description": "Before bed", "schedule": [1, 2, 3, 4, 5] }
 
 > {%
     client.global.set("habitId", response.body.id);
@@ -61,12 +62,12 @@ Authorization: Bearer {{accessToken}}
 GET {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 
-### Update a habit - 204
+### Update a habit - 204 (replaces title, description and schedule; the schedule is required here)
 PUT {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "title": "Read 30 pages", "description": "Before bed" }
+{ "title": "Read 30 pages", "description": "Before bed", "schedule": [0, 1, 2, 3, 4, 5, 6] }
 
 ### Mark a day as completed - 200; repeating it returns the same record (idempotent)
 PUT {{host}}/api/habits/{{habitId}}/records/{{date}}
@@ -84,7 +85,7 @@ Authorization: Bearer {{accessToken}}
 DELETE {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 
-### Create a diary entry - 201 + Location header (B6 will key the diary by date)
+### Create a diary entry - 201 + Location header; 409 if there already is one for that day (B6 will key the diary by date)
 POST {{host}}/api/daily-diaries
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json

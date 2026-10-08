@@ -15,6 +15,8 @@ public class HabitRecord : EntityBase
         Date = date;
     }
 
-    public static HabitRecord Create(Guid habitId, DateOnly date)
+    // internal: a record is part of the Habit aggregate and may only be created through Habit.MarkCompleted, which
+    // guards the "one record per day" rule.
+    internal static HabitRecord Create(Guid habitId, DateOnly date)
         => new HabitRecord(habitId, date);
 }

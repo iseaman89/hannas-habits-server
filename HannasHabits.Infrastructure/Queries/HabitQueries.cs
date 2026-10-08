@@ -20,14 +20,14 @@ public class HabitQueries : IHabitQueries
         => _context.Habits
             .AsNoTracking()
             .Where(h => h.UserId == userId)
-            .Select(h => new HabitListItemDto(h.Id, h.Title, h.Description))
+            .Select(h => new HabitListItemDto(h.Id, h.Title.Value, h.Description, h.Schedule.Days))
             .ToListAsync(cancellationToken);
 
     public Task<HabitDetailsDto?> GetByIdAsync(Guid userId, Guid habitId, CancellationToken cancellationToken)
         => _context.Habits
             .AsNoTracking()
             .Where(h => h.Id == habitId && h.UserId == userId)
-            .Select(h => new HabitDetailsDto(h.Id, h.Title, h.Description, h.CreatedAt))
+            .Select(h => new HabitDetailsDto(h.Id, h.Title.Value, h.Description, h.Schedule.Days, h.CreatedAt))
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<List<HabitRecordDto>?> GetRecordsAsync(

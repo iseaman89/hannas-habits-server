@@ -1,3 +1,4 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
 using MapsterMapper;
@@ -22,6 +23,11 @@ public class CreateDailyDiaryCommandHandler : IRequestHandler<CreateDailyDiaryCo
 
     public async Task<CreateDailyDiaryDto> Handle(CreateDailyDiaryCommand request, CancellationToken cancellationToken)
     {
+        // "One entry per user and day" spans all diaries, so no single DailyDiary can enforce it: it is checked here
+        // against the repository. The unique index stays as the safety net for concurrent requests (also a 409).
+        if (await _dailyDiaries.ExistsForDateAsync(_currentUser.UserId, request.Date, cancellationToken))
+            throw new ConflictException($"A diary entry for {request.Date:O} already exists.");
+
         var dailyDiary = DailyDiary.Create(_currentUser.UserId, request.Date, request.Text);
 
         _dailyDiaries.Add(dailyDiary);

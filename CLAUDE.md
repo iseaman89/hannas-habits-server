@@ -31,7 +31,7 @@ WebApi ──► Application ──► Domain
    └─────► Infrastructure ──► Application
 ```
 
-- `HannasHabits.Domain` — entities (`Habit` aggregate root with `HabitRecord`, `DailyDiary`), `EntityBase`, enums. No dependencies. Private setters + static `Create` factory + invariants inside the entity.
+- `HannasHabits.Domain` — entities (`Habit` aggregate root with `HabitRecord`, `DailyDiary`), value objects (`HabitTitle`, `HabitSchedule`: sealed records, valid by construction via `Create`), `EntityBase`, enums. No dependencies. Private setters + static `Create` factory + invariants inside the entity.
 - `HannasHabits.Application` — CQRS with **MediatR**: one folder per use case (`Command|Query`, `Handler`, `Validator`, `Dto`). **FluentValidation** via `ValidationBehaviour` pipeline. **Mapster** (`IRegister` per feature). Abstractions: `IApplicationDbContext`, `IUserContextService`, `IJwtTokenService`.
 - `HannasHabits.Infrastructure` — EF Core + PostgreSQL (`ApplicationDbContext`, `IEntityTypeConfiguration<T>` per entity, migrations), ASP.NET Identity (`ApplicationUser`), JWT + refresh tokens.
 - `HannasHabits.WebApi` — controllers (thin: only `IMediator.Send`), composition root (`Program.cs`).

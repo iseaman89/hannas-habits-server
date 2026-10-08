@@ -39,8 +39,10 @@ public class DailyDiariesController : ControllerBase
         return Ok(dailyDiary);
     }
 
+    /// <summary>Creates the entry of a day. Answers 409 if the user already has an entry for that day.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CreateDailyDiaryDto>> CreateDailyDiary(CreateDailyDiaryRequest request,
         CancellationToken cancellationToken)
     {

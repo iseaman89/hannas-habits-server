@@ -33,6 +33,7 @@ public class HabitRecordsController : ControllerBase
 
     /// <summary>Marks the day as completed. Idempotent: marking an already completed day returns the existing record.</summary>
     [HttpPut("{date}")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<HabitRecordDto>> MarkCompleted(Guid habitId, DateOnly date,
         CancellationToken cancellationToken)
     {
@@ -42,6 +43,7 @@ public class HabitRecordsController : ControllerBase
 
     [HttpDelete("{date}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UnmarkCompleted(Guid habitId, DateOnly date, CancellationToken cancellationToken)
     {
         await _mediator.Send(new UnmarkCompletedCommand(habitId, date), cancellationToken);

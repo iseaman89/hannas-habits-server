@@ -1,67 +1,82 @@
-using System.Diagnostics.CodeAnalysis;
 using HannasHabits.Domain.Common;
 using HannasHabits.Domain.Exceptions;
+using HannasHabits.Domain.ValueObjects;
 
 namespace HannasHabits.Domain.Entities;
 
 public class Habit : EntityBase
 {
+    public const int DescriptionMaxLength = 500;
+
     public Guid UserId { get; private set; }
-    public string Title { get; private set; }
+    public HabitTitle Title { get; private set; }
     public string? Description { get; private set; }
+    public HabitSchedule Schedule { get; private set; }
 
     private readonly List<HabitRecord> _records = new();
     public IReadOnlyCollection<HabitRecord> Records => _records;
 
-    // Parameterless constructor for EF Core only; it overwrites the value after materialization.
-    private Habit() { Title = null!; }
+    // Parameterless constructor for EF Core only; it overwrites the values after materialization.
+    private Habit()
+    {
+        Title = null!;
+        Schedule = null!;
+    }
 
-    private Habit(Guid userId, string title, string? description)
+    private Habit(Guid userId, HabitTitle title, string? description, HabitSchedule schedule)
     {
         UserId = userId;
-        SetTitle(title);
-        Description = description;
+        Title = title;
+        Description = NormalizeDescription(description);
+        Schedule = schedule;
     }
 
-    public static Habit Create(Guid userId, string title, string? description = null)
-        => new Habit(userId, title, description);
+    /// <param name="schedule">The planned days; a habit without an explicit schedule is planned every day.</param>
+    public static Habit Create(Guid userId, HabitTitle title, string? description = null, HabitSchedule? schedule = null)
+        => new Habit(userId, title, description, schedule ?? HabitSchedule.Daily);
 
-    public void Update(string title, string? description = null)
+    public void Update(HabitTitle title, string? description, HabitSchedule schedule)
     {
-        Rename(title);
-        UpdateDescription(description);
+        Title = title;
+        Description = NormalizeDescription(description);
+        Schedule = schedule;
     }
 
-    private void Rename(string title)
-    {
-        SetTitle(title);
-    }
+    /// <summary>The record of the given day, or <c>null</c> if the habit was not completed that day. Needs the records loaded.</summary>
+    public HabitRecord? RecordOn(DateOnly date)
+        => _records.FirstOrDefault(r => r.Date == date);
 
-    private void UpdateDescription(string? desc)
-    {
-        Description = desc;
-    }
-
-    [MemberNotNull(nameof(Title))]
-    private void SetTitle(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-            throw new DomainException("A habit title must not be empty.");
-
-        Title = title.Trim();
-    }
-
+    /// <summary>Marks a day as completed. A day can be completed only once. Needs the records loaded.</summary>
     public HabitRecord MarkCompleted(DateOnly date)
     {
+        if (RecordOn(date) is not null)
+            throw new DomainException($"The habit is already completed on {date:O}.");
+
         var record = HabitRecord.Create(Id, date);
         _records.Add(record);
         return record;
     }
 
-    /// <summary>Takes back the completion of a day; <c>false</c> if the day was not marked. Needs the records loaded.</summary>
-    public bool UnmarkCompleted(DateOnly date)
+    /// <summary>Takes back the completion of a day. Only a completed day can be taken back. Needs the records loaded.</summary>
+    public void UnmarkCompleted(DateOnly date)
     {
-        var record = _records.FirstOrDefault(r => r.Date == date);
-        return record is not null && _records.Remove(record);
+        var record = RecordOn(date)
+                     ?? throw new DomainException($"The habit is not completed on {date:O}.");
+
+        _records.Remove(record);
+    }
+
+    // An empty or whitespace-only description means "no description".
+    private static string? NormalizeDescription(string? description)
+    {
+        var normalized = description?.Trim();
+
+        if (string.IsNullOrEmpty(normalized))
+            return null;
+
+        if (normalized.Length > DescriptionMaxLength)
+            throw new DomainException($"A habit description must not be longer than {DescriptionMaxLength} characters.");
+
+        return normalized;
     }
 }

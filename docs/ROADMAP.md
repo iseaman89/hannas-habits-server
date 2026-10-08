@@ -51,7 +51,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   - Explain the trade-off (command vs. query side) to the user while doing it.
   *Done when:* `HannasHabits.Application.csproj` has no EF Core reference; handlers never touch a DbContext.
 
-- [ ] **B4 — Domain hardening.**
+- [x] **B4 — Domain hardening.** *(done 2026-10-08, details in PROGRESS; build 0 warnings, 42-check HTTP smoke test + deterministic race harness (21) + domain/converter checks (38) all PASS. Decided: keep `Include` of all records — see the comment in `HabitRepository`).*
   - Move invariants into the aggregate: `Habit.MarkCompleted` rejects duplicates, `Habit.UnmarkCompleted(date)` (B3 already added a minimal version returning `bool`, because without a `HabitRecords` DbSet the handler needs a way to remove a record through the aggregate; B4 refines it); `DailyDiary` unique per user+date → Conflict instead of DB exception. (Since B2 `MarkCompleted` is idempotent in the handler; two *concurrent* PUTs for the same day still hit the unique index → 500. Handle the race, e.g. catch the unique violation and return the existing record.)
   - Value objects (fill the empty `ValueObjects` folder): `HabitTitle`, `HabitSchedule` (set of `DayOfWeek`), later `Mood`/`Percentage`.
   - Port **habit schedules** (days of week) from the old model; validator for `Description` (max 500).
@@ -69,19 +69,21 @@ Both GitHub repos are **public** (checked 2026-10-08).
 
 - [ ] **M1 — Mockup → design brief** *(needs claude_design MCP, see above).* Import the mockup, then write `docs/DESIGN.md`: screens, components, design tokens (colors, fonts, spacing), and — important — the **list of features/fields the new design needs from the API** (moods, health bars, streaks, stats, …). Later sessions read `DESIGN.md` instead of re-importing the mockup.
   Mockup: https://claude.ai/design/p/a388ae78-c586-4176-a236-83ee88bef383?file=Hannas+Habits+App.dc.html
+  Also decide here whether the legacy `Priority` (Normal/High, `HannasHabits.Data.Shared/Enums/Priority.cs`) is needed — B4 deliberately did not port it.
   Files to focus on: `Hannas Habits App.dc.html`; also read `_ds/organic-a7e3cd91-5f19-4c95-8f8c-81a864dbaea6/_ds_bundle.js`, `_ds/organic-a7e3cd91-5f19-4c95-8f8c-81a864dbaea6/styles.css`, `support.js`.
   *Done when:* `docs/DESIGN.md` exists and B6–B8 are adjusted to it.
 
 - [ ] **B6 — Daily diary (extended).** Old model to port (`HannaHabitsService/Models/DailyDiary.cs`, `DailyTask.cs`): mood (Domain already has `Mood` enum 1–5), physical + mental health (0–100), highlight, learned things[], grateful things[], tasks[] (title + done). Adjust to `DESIGN.md`.
+  Pattern from B4 for `Mood` / health percentages: `sealed record` value object in `Domain/ValueObjects` (private ctor, `Create` validates, `const` limits reused by validators + EF config) + `ValueConverter` in `Infrastructure/Persistence/Converters`. B4 already made `CreateDailyDiary` answer 409 for a second entry per day (pre-check `ExistsForDateAsync` + unique index → `DuplicateEntryException`); the upsert-by-date route replaces that.
   Also: `DailyDiary.UserId` still has no FK to `AspNetUsers` (B2 only added it for `Habits`; adding it to a table with data fails on orphans). The DB holds one orphan test diary ("some text", owner = the deleted legacy user `6c6bba06-…`) — delete it first (ask the user), then add the FK like in `HabitConfiguration`. The diary routes are `/api/daily-diaries[/{id}]` by id until then.
   Routes (proposal): `GET /api/daily-diaries/{date}`, `PUT /api/daily-diaries/{date}` (upsert), `DELETE …/{date}`, `GET /api/daily-diaries?from=&to=` (calendar view: dates with entries).
   *Done when:* frontend-relevant fields roundtrip; migration applied; ids no longer needed by the frontend (date is the key).
 
 - [ ] **B7 — Year resolutions.** Port `YearResolution` + `Resolution` (aggregate per user+year, items with title/done, summary). CRUD + `GET /api/resolutions` / `GET /api/resolutions/{year}`.
 
-- [ ] **B8 — Habit statistics (only if the design needs them).** Port `CompletionRate` / `DaysOfWeekCounter` from `HannasHabits.Data.Shared` as pure domain logic (testable), expose via a query (completion rate per month, streaks).
+- [ ] **B8 — Habit statistics (only if the design needs them).** (`HabitSchedule.IncludesDay` / `Days` from B4 give the scheduled days; the DB stores the schedule as a bit mask, so “scheduled today” is computed in memory, not in SQL.) Port `CompletionRate` / `DaysOfWeekCounter` from `HannasHabits.Data.Shared` as pure domain logic (testable), expose via a query (completion rate per month, streaks).
 
-- [ ] **B9 — Tests.** Domain unit tests (entities, value objects), Application handler tests (fake repositories), integration tests (`WebApplicationFactory` + Testcontainers Postgres), architecture tests (NetArchTest: Domain depends on nothing, Application not on Infrastructure).
+- [ ] **B9 — Tests.** (Blueprints from B4: value objects + `Habit` invariants incl. `HabitSchedule` equality and `HabitScheduleConverter` round trip for masks 1..127; race tests with two scopes and a `Barrier` inside a wrapping `IUnitOfWork`, which forces “both load, then both save”: Mark → same record, Unmark → `ConflictException`, diary create → `DuplicateEntryException`; DB check constraint `CK_Habits_Schedule`.) Domain unit tests (entities, value objects), Application handler tests (fake repositories), integration tests (`WebApplicationFactory` + Testcontainers Postgres), architecture tests (NetArchTest: Domain depends on nothing, Application not on Infrastructure).
 
 - [ ] **B10 — Cleanup & delivery.** Delete legacy projects (`HannaHabitsService/`, `UserService/`, `UserService.Tests/`, `HannasHabits.Data.Shared/`) after everything is ported, rewrite `README.md` (it still describes microservices), WebApi `Dockerfile` + `docker-compose.yml` (API + Postgres), GitHub Actions (build + test).
 
@@ -103,7 +105,7 @@ Work with `--add-dir /Users/iseaman/WebstormProjects/hannas-habits-ui` or open C
 
 - [ ] **F4 — Auth feature.** Login/register against the new contract, Google login (known bug: `GoogleButton.jsx` uses `useGoogleLogin` but reads `credentialResponse.credential` — that field only exists with the `GoogleLogin` component / ID-token flow; with `useGoogleLogin` it is `undefined`. Match it to what B5 verifies on the backend), token storage + refresh (access token short-lived), `ProtectedRoute`, logout; user info from the API, not from `localStorage` keys.
 
-- [ ] **F5 — Habits feature.** Month tracker with `PUT/DELETE …/records/{date}` per click (optimistic update, no "Save all" loop), one `HabitForm` for create + edit (replaces the 90 % duplicate `CreateHabit`/`EditHabit`), delete confirm. Dates as `yyyy-MM-dd` (date-fns), never `toISOString()`.
+- [ ] **F5 — Habits feature.** (API contract since B4: `schedule` is `number[]`, `0 = Sunday … 6 = Saturday` — the same as JS `Date#getDay()` / date-fns `getDay`; optional on POST (omitted = every day), required on PUT.) Month tracker with `PUT/DELETE …/records/{date}` per click (optimistic update, no "Save all" loop), one `HabitForm` for create + edit (replaces the 90 % duplicate `CreateHabit`/`EditHabit`), delete confirm. Dates as `yyyy-MM-dd` (date-fns), never `toISOString()`.
 
 - [ ] **F6 — Daily diary feature.** Route `/diary/:date` (replaces router `state` + the `id === -1` sentinel), form components get `value`/`onChange` instead of `setDailyDiary`+`setShowButton`, dirty state derived from form state, save with toast on success/error.
 

@@ -1,6 +1,7 @@
 using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
+using HannasHabits.Domain.ValueObjects;
 using MediatR;
 
 namespace HannasHabits.Application.Habits.Commands.UpdateHabit;
@@ -25,7 +26,7 @@ public class UpdateHabitCommandHandler : IRequestHandler<UpdateHabitCommand, Uni
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.Id);
 
-        habit.Update(request.Title, request.Description);
+        habit.Update(HabitTitle.Create(request.Title), request.Description, HabitSchedule.Create(request.Schedule));
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -1,5 +1,6 @@
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
+using HannasHabits.Domain.ValueObjects;
 using MapsterMapper;
 using MediatR;
 
@@ -22,7 +23,9 @@ public class CreateHabitCommandHandler : IRequestHandler<CreateHabitCommand, Cre
 
     public async Task<CreateHabitDto> Handle(CreateHabitCommand request, CancellationToken cancellationToken)
     {
-        var habit = Habit.Create(_currentUser.UserId, request.Title, request.Description);
+        var schedule = request.Schedule is null ? null : HabitSchedule.Create(request.Schedule);
+
+        var habit = Habit.Create(_currentUser.UserId, HabitTitle.Create(request.Title), request.Description, schedule);
 
         _habits.Add(habit);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

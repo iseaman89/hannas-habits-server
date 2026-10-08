@@ -10,6 +10,9 @@ public interface IDailyDiaryRepository
 {
     Task<DailyDiary?> GetByIdAsync(Guid userId, Guid diaryId, CancellationToken cancellationToken);
 
+    /// <summary>Whether the user already has a diary entry for that day.</summary>
+    Task<bool> ExistsForDateAsync(Guid userId, DateOnly date, CancellationToken cancellationToken);
+
     void Add(DailyDiary dailyDiary);
 
     void Remove(DailyDiary dailyDiary);
