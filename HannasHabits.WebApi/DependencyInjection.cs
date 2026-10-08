@@ -12,7 +12,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddWebApi(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers();
+        // FluentValidation (ValidationBehaviour) is the one validation path. Without this switch MVC additionally
+        // treats every non-nullable reference property of a request as [Required] and answers a missing property with
+        // its own error (key "Title" instead of "title") before the command is even created.
+        services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
 
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();

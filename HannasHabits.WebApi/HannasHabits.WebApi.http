@@ -9,7 +9,7 @@
 @password = Dev-Passw0rd!
 @date = 2026-10-08
 
-### Register (first time only) - 200 with { user, tokens }
+### Register (first time only) - 200 with { user, tokens }; 409 if the email exists, 400 for a weak password
 POST {{host}}/api/auth/register
 Content-Type: application/json
 
@@ -31,7 +31,22 @@ Content-Type: application/json
     client.global.set("refreshToken", response.body.tokens.refreshToken);
 %}
 
-### Refresh the token pair
+### Google login - 200 with { user, tokens }
+# Needs a real Google ID token (JWT) issued for our client id (Google:ClientId), e.g. from the frontend's Google sign-in.
+# 401 if the token is invalid, 409 if a password account with that email already exists.
+POST {{host}}/api/auth/google
+Content-Type: application/json
+
+{ "idToken": "<paste a Google ID token here>" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Refresh the token pair - 200 with { user, tokens }
+# A refresh token works exactly once: the response carries a NEW one (the handler below stores it).
+# Sending an already used one again counts as theft - 401 and every session of the user is revoked.
 POST {{host}}/api/auth/refresh
 Content-Type: application/json
 
@@ -115,7 +130,7 @@ Content-Type: application/json
 DELETE {{host}}/api/daily-diaries/{{diaryId}}
 Authorization: Bearer {{accessToken}}
 
-### Revoke one refresh token - 204
+### Revoke one refresh token (logout of this session) - 204, also for unknown / already revoked tokens
 POST {{host}}/api/auth/revoke
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json

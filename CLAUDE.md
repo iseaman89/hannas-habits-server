@@ -32,13 +32,13 @@ WebApi ──► Application ──► Domain
 ```
 
 - `HannasHabits.Domain` — entities (`Habit` aggregate root with `HabitRecord`, `DailyDiary`), value objects (`HabitTitle`, `HabitSchedule`: sealed records, valid by construction via `Create`), `EntityBase`, enums. No dependencies. Private setters + static `Create` factory + invariants inside the entity.
-- `HannasHabits.Application` — CQRS with **MediatR**: one folder per use case (`Command|Query`, `Handler`, `Validator`, `Dto`). **FluentValidation** via `ValidationBehaviour` pipeline. **Mapster** (`IRegister` per feature). Abstractions: `IApplicationDbContext`, `IUserContextService`, `IJwtTokenService`.
-- `HannasHabits.Infrastructure` — EF Core + PostgreSQL (`ApplicationDbContext`, `IEntityTypeConfiguration<T>` per entity, migrations), ASP.NET Identity (`ApplicationUser`), JWT + refresh tokens.
+- `HannasHabits.Application` — CQRS with **MediatR**: one folder per use case (`Command|Query`, `Handler`, `Validator`, `Dto`). **FluentValidation** via `ValidationBehaviour` pipeline. **Mapster** (`IRegister` per feature). Abstractions: repositories + query interfaces per feature, `IUnitOfWork`, `ICurrentUser`, `IIdentityService`, `IJwtTokenService`, `IGoogleTokenVerifier`. Auth is a use-case folder like the others (`Auth/Commands/{Register,Login,GoogleLogin,Refresh,Revoke,RevokeAll}`); all token-issuing endpoints answer with one `AuthResult` (`{ user, tokens }`).
+- `HannasHabits.Infrastructure` — EF Core + PostgreSQL (`ApplicationDbContext`, `IEntityTypeConfiguration<T>` per entity, migrations), ASP.NET Identity (`ApplicationUser`, lockout 5 failures/15 min), JWT access tokens + rotating refresh tokens (stored as SHA-256 hash, replay of a used token revokes all sessions of the user), Google ID-token verification.
 - `HannasHabits.WebApi` — controllers (thin: only `IMediator.Send`), composition root (`Program.cs`).
 
 Every query/command filters by the current user's id (data isolation) — keep this.
 
-Decision: persistence goes through **repositories** (one per aggregate root; interfaces in Application, implementations in Infrastructure) instead of handlers using `IApplicationDbContext` directly. Migration is still to do — existing handlers use `IApplicationDbContext`.
+Decision: persistence goes through **repositories** (one per aggregate root; interfaces in Application, implementations in Infrastructure) instead of handlers using a DbContext directly (done in B3; the read side uses small query interfaces that project to DTOs). Application has no EF Core reference.
 
 Not part of the solution (legacy, kept only as reference for porting features, to be deleted once ported): `HannaHabitsService/`, `UserService/`, `UserService.Tests/`, `HannasHabits.Data.Shared/`.
 
@@ -55,7 +55,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10, mockup M
 
 ## Configuration & secrets
 
-- Secrets live in `dotnet user-secrets` of `HannasHabits.WebApi` (only loaded when `ASPNETCORE_ENVIRONMENT=Development`; production uses env vars): `ConnectionStrings:DbConnection` (PostgreSQL), `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `MediatR:LicenseKey` (free Community key, expires 2027-10-08). `appsettings.json` holds only non-secret defaults. Never commit secrets, passwords or `client_secret*.json` files.
+- Secrets live in `dotnet user-secrets` of `HannasHabits.WebApi` (only loaded when `ASPNETCORE_ENVIRONMENT=Development`; production uses env vars): `ConnectionStrings:DbConnection` (PostgreSQL), `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `MediatR:LicenseKey` (free Community key, expires 2027-10-08), `Google:ClientId` (public OAuth client id of the frontend — not secret, but kept here per environment; production env var `Google__ClientId`; the app refuses to start without it). `appsettings.json` holds only non-secret defaults. Never commit secrets, passwords or `client_secret*.json` files.
 - Non-secret config: `Cors:AllowedOrigins` (array; Development: `http://localhost:5173` in `appsettings.Development.json`; production via env vars `Cors__AllowedOrigins__0`, …; empty = no cross-origin access). The `Jwt:` section is bound to `JwtOptions` and validated on startup (`Jwt:Key` ≥ 32 chars; optional `Jwt:AccessMinutes` default 15, `Jwt:RefreshDays` default 30).
 - Show secrets only masked (`dotnet user-secrets list | sed -E 's/=.*/= <hidden>/'`).
 - Running `dotnet ef` against the real DB needs `ASPNETCORE_ENVIRONMENT=Development`.

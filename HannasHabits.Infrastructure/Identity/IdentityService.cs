@@ -1,0 +1,142 @@
+using FluentValidation;
+using FluentValidation.Results;
+using HannasHabits.Application.Auth;
+using HannasHabits.Application.Common.Exceptions;
+using HannasHabits.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+
+namespace HannasHabits.Infrastructure.Identity;
+
+// UserManager and SignInManager take no CancellationToken, so the tokens only reach the database calls made here.
+public class IdentityService : IIdentityService
+{
+    // The same answer for "no such email" and "wrong password": the login must not tell which emails have an account.
+    private const string InvalidCredentials = "The email or password is incorrect.";
+    private const string EmailInUse = "The email address is already in use.";
+
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly ApplicationDbContext _db;
+
+    public IdentityService(
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
+        ApplicationDbContext db)
+    {
+        _userManager = userManager;
+        _signInManager = signInManager;
+        _db = db;
+    }
+
+    public async Task<IdentityUserDto> RegisterAsync(string email, string password, CancellationToken cancellationToken = default)
+    {
+        var user = NewUser(email);
+
+        IdentityResult result;
+        try
+        {
+            result = await _userManager.CreateAsync(user, password);
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            // Two concurrent registrations passed Identity's duplicate check; the unique index stopped the second.
+            throw new ConflictException(EmailInUse, exception);
+        }
+
+        ThrowIfFailed(result);
+
+        return ToDto(user);
+    }
+
+    public async Task<IdentityUserDto> AuthenticateAsync(string email, string password, CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByEmailAsync(email)
+                   ?? throw new AuthenticationFailedException(InvalidCredentials);
+
+        // lockoutOnFailure: every wrong password counts, and after the configured number of failures the account is
+        // locked for a while - this is what makes guessing passwords against /login impractical.
+        var result = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
+
+        if (result.IsLockedOut)
+            throw new AccountLockedOutException();
+
+        if (!result.Succeeded)
+            throw new AuthenticationFailedException(InvalidCredentials);
+
+        return ToDto(user);
+    }
+
+    public async Task<IdentityUserDto> SignInWithExternalAsync(ExternalIdentity identity, CancellationToken cancellationToken = default)
+    {
+        var existing = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
+        if (existing is not null)
+            return ToDto(existing);
+
+        var user = NewUser(identity.Email);
+        user.EmailConfirmed = true; // Google verified it (the verifier rejects tokens without a verified email)
+
+        try
+        {
+            // Create the user and the Google login together: a user without login would be stuck, because the next
+            // attempt would find the email taken.
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+            ThrowIfFailed(await _userManager.CreateAsync(user));
+            ThrowIfFailed(await _userManager.AddLoginAsync(user, new UserLoginInfo(identity.Provider, identity.Subject, identity.Provider)));
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is ConflictException || exception is DbUpdateException dbUpdate && IsUniqueViolation(dbUpdate))
+        {
+            // The email is taken - either by the same person (their first Google sign-in ran twice at once and the
+            // other request was faster; Identity's duplicate check or the unique index tells us) or by somebody else.
+            var winner = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
+            if (winner is not null)
+                return ToDto(winner);
+
+            // No silent linking by email. Registration does not confirm email addresses, so anybody could have created
+            // a password account for somebody else's address in advance; linking the real owner's Google login to it
+            // would hand the account (and everything they enter) to whoever knows that password. Linking has to be an
+            // explicit step of a signed-in user, or has to wait until emails are confirmed.
+            throw new ConflictException("An account with this email address already exists. Sign in with your password instead.", exception);
+        }
+
+        return ToDto(user);
+    }
+
+    private static ApplicationUser NewUser(string email) => new() { Id = Guid.NewGuid(), Email = email, UserName = email };
+
+    private static IdentityUserDto ToDto(ApplicationUser user) =>
+        new(user.Id, user.UserName ?? user.Email ?? "", user.Email ?? "");
+
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+
+    // Identity reports problems as codes; they become the same exceptions the rest of the application throws, so the
+    // GlobalExceptionHandler turns them into 409 / 400 with the usual (camelCase) error keys.
+    private static void ThrowIfFailed(IdentityResult result)
+    {
+        if (result.Succeeded)
+            return;
+
+        if (result.Errors.Any(e => e.Code is nameof(IdentityErrorDescriber.DuplicateEmail) or nameof(IdentityErrorDescriber.DuplicateUserName)))
+            throw new ConflictException(EmailInUse);
+
+        var failures = result.Errors.Select(error => new ValidationFailure(PropertyOf(error), error.Description)).ToList();
+
+        // Anything that is neither a duplicate nor a rule the caller can fix (e.g. a concurrency failure) is not a 400.
+        if (failures.Any(f => f.PropertyName.Length == 0))
+            throw new InvalidOperationException("Identity operation failed: " + string.Join("; ", result.Errors.Select(e => e.Code)));
+
+        throw new ValidationException(failures);
+    }
+
+    private static string PropertyOf(IdentityError error) => error.Code switch
+    {
+        _ when error.Code.StartsWith("Password", StringComparison.Ordinal) => "Password",
+        nameof(IdentityErrorDescriber.InvalidEmail) or nameof(IdentityErrorDescriber.InvalidUserName) => "Email",
+        _ => string.Empty
+    };
+}

@@ -57,6 +57,8 @@ public class GlobalExceptionHandler : IExceptionHandler
         NotFoundException => Problem(StatusCodes.Status404NotFound, "The resource was not found.", exception.Message),
         ConflictException => Problem(StatusCodes.Status409Conflict, "The request conflicts with the current state.", exception.Message),
         ForbiddenException => Problem(StatusCodes.Status403Forbidden, "Access is forbidden.", exception.Message),
+        AuthenticationFailedException => Problem(StatusCodes.Status401Unauthorized, "Authentication failed.", exception.Message),
+        AccountLockedOutException => Problem(StatusCodes.Status429TooManyRequests, "Too many failed sign-in attempts.", exception.Message),
         UnauthorizedAccessException => Problem(StatusCodes.Status401Unauthorized, "Authentication is required.", detail: null),
         // Never leak internals of unexpected errors to the client.
         _ => Problem(StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail: null)

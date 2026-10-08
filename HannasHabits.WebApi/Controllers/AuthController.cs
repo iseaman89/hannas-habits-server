@@ -1,102 +1,82 @@
-using System.Security.Claims;
-using HannasHabits.Application.Common.Interfaces;
-using HannasHabits.Infrastructure.Identity;
-using HannasHabits.Infrastructure.Persistence;
+using HannasHabits.Application.Auth;
+using HannasHabits.Application.Auth.Commands.RevokeAll;
 using HannasHabits.WebApi.Models;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.JsonWebTokens;
-using LoginRequest = HannasHabits.WebApi.Models.LoginRequest;
-using RefreshRequest = HannasHabits.WebApi.Models.RefreshRequest;
-using RegisterRequest = HannasHabits.WebApi.Models.RegisterRequest;
-
 
 namespace HannasHabits.WebApi.Controllers;
 
+/// <summary>
+/// register, login, google and refresh all answer with the same <see cref="AuthResult"/> (user + tokens).
+/// </summary>
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager;
-    private readonly IJwtTokenService _tokenService;
-    private readonly ApplicationDbContext _db;
+    private readonly IMediator _mediator;
 
-    public AuthController(
-        UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
-        IJwtTokenService tokenService,
-        ApplicationDbContext db)
+    public AuthController(IMediator mediator)
     {
-        _userManager = userManager;
-        _signInManager = signInManager;
-        _tokenService = tokenService;
-        _db = db;
+        _mediator = mediator;
     }
 
     [HttpPost("register")]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest req)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<AuthResult>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {
-        var exists = await _userManager.FindByEmailAsync(req.Email);
-        if (exists != null) return BadRequest("Email already in use");
-
-        var user = new ApplicationUser { Id = Guid.NewGuid(), Email = req.Email, UserName = req.Email };
-        var create = await _userManager.CreateAsync(user, req.Password);
-        if (!create.Succeeded) return BadRequest(create.Errors);
-
-        var dto = new IdentityUserDto(user.Id, user.UserName ?? user.Email ?? "", user.Email ?? "");
-        var pair = await _tokenService.CreateTokenPairAsync(dto, HttpContext.Connection.RemoteIpAddress?.ToString());
-
-        return Ok(new { user = dto, tokens = pair });
+        return Ok(await _mediator.Send(request.ToCommand(), cancellationToken));
     }
 
     [HttpPost("login")]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Login([FromBody] LoginRequest req)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<AuthResult>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
-        var user = await _userManager.FindByEmailAsync(req.Email);
-        if (user == null) return BadRequest("Invalid credentials");
+        return Ok(await _mediator.Send(request.ToCommand(), cancellationToken));
+    }
 
-        var check = await _signInManager.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: false);
-        if (!check.Succeeded) return BadRequest("Invalid credentials");
-
-        var dto = new IdentityUserDto(user.Id, user.UserName ?? user.Email ?? "", user.Email ?? "");
-        var pair = await _tokenService.CreateTokenPairAsync(dto, HttpContext.Connection.RemoteIpAddress?.ToString());
-
-        return Ok(new { user = dto, tokens = pair });
+    [HttpPost("google")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<AuthResult>> Google(GoogleLoginRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await _mediator.Send(request.ToCommand(), cancellationToken));
     }
 
     [HttpPost("refresh")]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<AuthResult>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
     {
-        var pair = await _tokenService.RefreshAsync(req.RefreshToken, HttpContext.Connection.RemoteIpAddress?.ToString());
-        if (pair == null) return Unauthorized();
-
-        return Ok(new { tokens = pair });
+        return Ok(await _mediator.Send(request.ToCommand(), cancellationToken));
     }
 
     [Authorize]
     [HttpPost("revoke")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Revoke([FromBody] RevokeRequest req)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Revoke(RevokeRequest request, CancellationToken cancellationToken)
     {
-        var ok = await _tokenService.RevokeRefreshTokenAsync(req.RefreshToken, HttpContext.Connection.RemoteIpAddress?.ToString());
-        return ok ? NoContent() : NotFound();
+        await _mediator.Send(request.ToCommand(), cancellationToken);
+        return NoContent();
     }
 
     [Authorize]
     [HttpPost("revoke-all")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RevokeAll()
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RevokeAll(CancellationToken cancellationToken)
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (userIdClaim == null) return Unauthorized();
-        var userId = Guid.Parse(userIdClaim);
-        await _tokenService.RevokeAllForUserAsync(userId);
+        await _mediator.Send(new RevokeAllCommand(), cancellationToken);
         return NoContent();
     }
 }
