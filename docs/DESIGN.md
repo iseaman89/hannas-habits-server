@@ -173,6 +173,10 @@ Not designed in the prototype — needed anyway:
 
 - **Contrast of the habit cells (measured in F5, against the card `surface`):** light theme — *missed* 1.08 : 1 (practically invisible), *upcoming* ring 1.5 : 1, *done* fill 2.1 : 1, *due-today* ring 2.7 : 1, check icon on *done* 2.4 : 1; all below the 3 : 1 that WCAG 1.4.11 asks of graphics. Dark theme is fine except *missed* (2.2 : 1) — upcoming ring 3.5, done 5.4, due-today 5.1, check icon 6.1. The states are also told apart by shape (filled / ring / dot) and every cell has a text label, so nothing depends on colour alone *except missed vs. open-past*, which differ only by that pale fill. Design colours kept; if it matters, darken `--hh-miss` in the light theme (e.g. `accent-300`/`400`) and use a darker `done` — a design decision for the user.
 
+- **Clear buttons (decided in F6):** the diary can be partly empty — mood, body and mind are nullable, and a day with nothing in it is deleted by the server. The mockup has no way to take a chosen mood or a slider value back (a radio group cannot be un-chosen), so each of the three cards got a small ✕ button next to its value, and an untouched slider rests dimmed at the middle with a dash instead of a number. Without them a day could never become empty again.
+- **Add rows** (grateful / learned / tasks) add on Enter **and when the input loses focus**, and every line can be edited in place and removed (✕ on hover or focus); a line left blank is removed on blur. None of it is in the mockup.
+- The habits card is titled **“Today’s habits”** on today and **“Habits of the day”** on any other day; the diary header has no “Today” button (the sidebar's Today does that).
+
 Prototype shortcuts not to copy:
 - Interactive `div`/`span` with `onClick` everywhere → real `button`s / `role="radio"` / `role="checkbox"` / `<input type="range">` with labels and keyboard support (the old UI had clickable `<img>`s — F9 lists this too).
 - Inline styles and hard-coded demo data, `localStorage` only for the theme, "carry" streak offset (demo seed), fake login that accepts anything.
