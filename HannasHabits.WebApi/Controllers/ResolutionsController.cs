@@ -25,7 +25,8 @@ public class ResolutionsController : ControllerBase
 
     /// <summary>The year's resolutions in creation order. A year without any answers 200 with an empty list.</summary>
     [HttpGet("{year}")]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<ResolutionDto>>> GetByYear(int year, CancellationToken cancellationToken)
     {
         var resolutions = await _mediator.Send(new GetResolutionsByYearQuery(year), cancellationToken);
@@ -33,7 +34,8 @@ public class ResolutionsController : ControllerBase
     }
 
     [HttpPost("{year}/items")]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ResolutionDto>> Add(int year, AddResolutionRequest request,
         CancellationToken cancellationToken)
@@ -47,7 +49,7 @@ public class ResolutionsController : ControllerBase
     /// <summary>Replaces title, kept flag and habit link (this is also how an item is marked kept or open again).</summary>
     [HttpPut("{year}/items/{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(int year, Guid id, UpdateResolutionRequest request,

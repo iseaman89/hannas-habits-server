@@ -24,6 +24,7 @@ public class HabitsController : ControllerBase
     }
 
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<List<HabitListItemDto>>> GetHabits(CancellationToken cancellationToken)
     {
         var habits = await _mediator.Send(new GetAllHabitsQuery(), cancellationToken);
@@ -36,7 +37,8 @@ public class HabitsController : ControllerBase
     /// caller's local today; omitted = the server's UTC date.
     /// </summary>
     [HttpGet("overview")]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<HabitOverviewDto>>> GetOverview(
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] DateOnly? asOf,
         CancellationToken cancellationToken)
@@ -46,6 +48,7 @@ public class HabitsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<HabitDetailsDto>> GetHabitById(Guid id, CancellationToken cancellationToken)
     {
@@ -54,7 +57,8 @@ public class HabitsController : ControllerBase
     }
 
     [HttpPost]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreateHabitDto>> CreateHabit(CreateHabitRequest request,
         CancellationToken cancellationToken)
     {
@@ -64,7 +68,7 @@ public class HabitsController : ControllerBase
 
     [HttpPut("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateHabit(Guid id, UpdateHabitRequest request,
         CancellationToken cancellationToken)

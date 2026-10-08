@@ -25,7 +25,8 @@ public class DailyDiariesController : ControllerBase
 
     /// <summary>Days that have an entry, oldest first, with their mood (for the calendar). <c>from</c>/<c>to</c> are inclusive and optional.</summary>
     [HttpGet]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<DailyDiaryDayDto>>> GetDays(
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
@@ -35,6 +36,7 @@ public class DailyDiariesController : ControllerBase
 
     /// <summary>The entry of a day. 404 means nothing is written for that day yet.</summary>
     [HttpGet("{date}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DailyDiaryDto>> GetByDate(DateOnly date, CancellationToken cancellationToken)
     {
@@ -48,7 +50,7 @@ public class DailyDiariesController : ControllerBase
     /// </summary>
     [HttpPut("{date}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Save(DateOnly date, SaveDailyDiaryRequest request,
         CancellationToken cancellationToken)

@@ -23,7 +23,8 @@ public class HabitRecordsController : ControllerBase
 
     /// <summary>Completed days of a habit, oldest first. <c>from</c>/<c>to</c> are inclusive and optional.</summary>
     [HttpGet]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<HabitRecordDto>>> GetRecords(Guid habitId,
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
@@ -33,6 +34,7 @@ public class HabitRecordsController : ControllerBase
 
     /// <summary>Marks the day as completed. Idempotent: marking an already completed day returns the existing record.</summary>
     [HttpPut("{date}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<HabitRecordDto>> MarkCompleted(Guid habitId, DateOnly date,
         CancellationToken cancellationToken)

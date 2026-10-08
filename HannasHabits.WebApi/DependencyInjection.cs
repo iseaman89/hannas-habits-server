@@ -1,6 +1,7 @@
 using System.Text;
 using HannasHabits.Infrastructure.Identity;
 using HannasHabits.WebApi.ExceptionHandling;
+using HannasHabits.WebApi.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -72,6 +73,15 @@ public static class DependencyInjection
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
+            // A generated client should see what the C# types say: `string` is never null, `string?` can be.
+            options.SupportNonNullableReferenceTypes();
+
+            // OpenAPI 3.0 cannot put `nullable` next to a `$ref`, so `Mood? Mood` would lose its nullability.
+            // allOf: [$ref] + nullable keeps it.
+            options.UseAllOfToExtendReferenceSchemas();
+
+            options.SchemaFilter<ApplicationDtoSchemaFilter>();
+
             options.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, new OpenApiSecurityScheme
             {
                 Description = "Paste the access token only - Swagger adds the \"Bearer \" prefix.",
