@@ -2,6 +2,7 @@ using HannasHabits.Application.Auth;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Application.DailyDiaries;
 using HannasHabits.Application.Habits;
+using HannasHabits.Application.Resolutions;
 using HannasHabits.Infrastructure.Identity;
 using HannasHabits.Infrastructure.Persistence;
 using HannasHabits.Infrastructure.Queries;
@@ -57,8 +58,10 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IHabitRepository, HabitRepository>();
         services.AddScoped<IDailyDiaryRepository, DailyDiaryRepository>();
+        services.AddScoped<IResolutionRepository, ResolutionRepository>();
         services.AddScoped<IHabitQueries, HabitQueries>();
         services.AddScoped<IDailyDiaryQueries, DailyDiaryQueries>();
+        services.AddScoped<IResolutionQueries, ResolutionQueries>();
 
         services.AddHttpContextAccessor();
 

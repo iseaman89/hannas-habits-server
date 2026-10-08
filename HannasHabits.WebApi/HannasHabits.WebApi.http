@@ -132,6 +132,34 @@ Authorization: Bearer {{accessToken}}
 DELETE {{host}}/api/daily-diaries/{{date}}
 Authorization: Bearer {{accessToken}}
 
+### Resolutions of a year, in creation order - 200; a year without any answers with an empty list. Years 2000-2100.
+GET {{host}}/api/resolutions/2026
+Authorization: Bearer {{accessToken}}
+
+### Add a resolution - 201 with the item (Location = the year's list). At most 50 per year (400 beyond that).
+# habitId is optional: a habit of the user that tracks this resolution (400 errors.habitId if it is not theirs).
+POST {{host}}/api/resolutions/2026/items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 12 books", "habitId": "{{habitId}}" }
+
+> {%
+    client.global.set("resolutionId", response.body.id);
+%}
+
+### Mark a resolution kept - 204. The PUT replaces title, kept and habit link: leave habitId out to remove the link,
+### "kept" is required (400 if missing, so a forgotten value cannot re-open it). 404 for a wrong year or another user's item.
+PUT {{host}}/api/resolutions/2026/items/{{resolutionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 12 books", "kept": true, "habitId": "{{habitId}}" }
+
+### Delete a resolution - 204; 404 if there is none. (Deleting the linked habit keeps the resolution and only clears the link.)
+DELETE {{host}}/api/resolutions/2026/items/{{resolutionId}}
+Authorization: Bearer {{accessToken}}
+
 ### Revoke one refresh token (logout of this session) - 204, also for unknown / already revoked tokens
 POST {{host}}/api/auth/revoke
 Authorization: Bearer {{accessToken}}

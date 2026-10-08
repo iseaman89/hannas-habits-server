@@ -15,6 +15,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     public DbSet<Habit> Habits => Set<Habit>();
     public DbSet<HabitRecord> HabitRecords => Set<HabitRecord>();
     public DbSet<DailyDiary> DailyDiaries => Set<DailyDiary>();
+    public DbSet<Resolution> Resolutions => Set<Resolution>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
@@ -44,6 +45,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
                                                   })
         {
             throw new DuplicateEntryException(exception);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                                                  {
+                                                      SqlState: PostgresErrorCodes.ForeignKeyViolation
+                                                  })
+        {
+            // e.g. the habit a new resolution links to was deleted by another request in the meantime.
+            throw new ConflictException("A related resource no longer exists. Please retry.", exception);
         }
     }
 }

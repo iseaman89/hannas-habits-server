@@ -31,7 +31,7 @@ WebApi ──► Application ──► Domain
    └─────► Infrastructure ──► Application
 ```
 
-- `HannasHabits.Domain` — entities (`Habit` aggregate root with `HabitRecord`, `DailyDiary`), value objects (`HabitTitle`, `HabitSchedule`: sealed records, valid by construction via `Create`), `EntityBase`, enums. No dependencies. Private setters + static `Create` factory + invariants inside the entity.
+- `HannasHabits.Domain` — entities (`Habit` aggregate root with `HabitRecord`, `DailyDiary`, `Resolution`), value objects (`HabitTitle`, `HabitSchedule`: sealed records, valid by construction via `Create`), `EntityBase`, enums. No dependencies. Private setters + static `Create` factory + invariants inside the entity.
 - `HannasHabits.Application` — CQRS with **MediatR**: one folder per use case (`Command|Query`, `Handler`, `Validator`, `Dto`). **FluentValidation** via `ValidationBehaviour` pipeline. **Mapster** (`IRegister` per feature). Abstractions: repositories + query interfaces per feature, `IUnitOfWork`, `ICurrentUser`, `IIdentityService`, `IJwtTokenService`, `IGoogleTokenVerifier`. Auth is a use-case folder like the others (`Auth/Commands/{Register,Login,GoogleLogin,Refresh,Revoke,RevokeAll}`); all token-issuing endpoints answer with one `AuthResult` (`{ user, tokens }`).
 - `HannasHabits.Infrastructure` — EF Core + PostgreSQL (`ApplicationDbContext`, `IEntityTypeConfiguration<T>` per entity, migrations), ASP.NET Identity (`ApplicationUser`, lockout 5 failures/15 min), JWT access tokens + rotating refresh tokens (stored as SHA-256 hash, replay of a used token revokes all sessions of the user), Google ID-token verification.
 - `HannasHabits.WebApi` — controllers (thin: only `IMediator.Send`), composition root (`Program.cs`).
