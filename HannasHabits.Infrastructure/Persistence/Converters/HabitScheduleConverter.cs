@@ -1,3 +1,4 @@
+using HannasHabits.Domain.Exceptions;
 using HannasHabits.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -21,5 +22,8 @@ public class HabitScheduleConverter : ValueConverter<HabitSchedule, int>
         => schedule.Days.Aggregate(0, (mask, day) => mask | (1 << (int)day));
 
     public static HabitSchedule FromMask(int mask)
-        => HabitSchedule.Create(Enum.GetValues<DayOfWeek>().Where(day => (mask & (1 << (int)day)) != 0));
+        => mask is < MinMask or > MaxMask
+            // A bit outside the seven days would otherwise be dropped silently and the row would load as a different plan.
+            ? throw new DomainException($"'{mask}' is not a valid stored schedule ({MinMask}..{MaxMask}).")
+            : HabitSchedule.Create(Enum.GetValues<DayOfWeek>().Where(day => (mask & (1 << (int)day)) != 0));
 }

@@ -51,8 +51,11 @@ public class Habit : EntityBase
 
     public void Update(HabitTitle title, string? description, HabitSchedule schedule)
     {
+        // Validate first, assign afterwards: a rejected update must not leave the habit half changed.
+        var normalizedDescription = NormalizeDescription(description);
+
         Title = title;
-        Description = NormalizeDescription(description);
+        Description = normalizedDescription;
         Schedule = schedule;
     }
 

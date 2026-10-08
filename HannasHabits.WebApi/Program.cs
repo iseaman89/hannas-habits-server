@@ -28,3 +28,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Makes the top-level Program visible to WebApplicationFactory<Program> in the integration tests.
+public partial class Program;

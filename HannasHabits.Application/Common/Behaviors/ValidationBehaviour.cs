@@ -16,9 +16,10 @@ public class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior<TReque
     {
         if (_validators.Any())
         {
-            var context = new ValidationContext<TRequest>(request);
-            
-            var results = await Task.WhenAll(_validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+            // One context per validator: a context collects the failures, so sharing it would report every failure once
+            // per validator (and let the validators, which run in parallel, write into the same list).
+            var results = await Task.WhenAll(_validators.Select(v =>
+                v.ValidateAsync(new ValidationContext<TRequest>(request), cancellationToken)));
             
             var failures = results.SelectMany(r => r.Errors).Where(f => f != null).ToList();
             

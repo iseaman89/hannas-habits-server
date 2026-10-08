@@ -93,6 +93,10 @@ public class IdentityService : IIdentityService
         }
         catch (Exception exception) when (exception is ConflictException || exception is DbUpdateException dbUpdate && IsUniqueViolation(dbUpdate))
         {
+            // A failed insert stays tracked as "added" in this scope's context, and the token service saves the same
+            // context right after us: it would insert the user again and fail with the same unique violation.
+            _db.ChangeTracker.Clear();
+
             // The email is taken - either by the same person (their first Google sign-in ran twice at once and the
             // other request was faster; Identity's duplicate check or the unique index tells us) or by somebody else.
             var winner = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
