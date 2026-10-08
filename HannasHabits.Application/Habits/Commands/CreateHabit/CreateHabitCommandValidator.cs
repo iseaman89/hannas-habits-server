@@ -16,6 +16,10 @@ public class CreateHabitCommandValidator : AbstractValidator<CreateHabitCommand>
         RuleFor(x => x.Description)
             .MaximumLength(Habit.DescriptionMaxLength);
 
+        RuleFor(x => x.StartDate)
+            .InclusiveBetween(Habit.MinStartDate, Habit.MaxStartDate)
+            .When(x => x.StartDate.HasValue);
+
         // No schedule at all means "every day", but an explicitly empty one is a mistake.
         When(x => x.Schedule is not null, () =>
         {

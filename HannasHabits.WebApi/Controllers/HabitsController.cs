@@ -2,6 +2,7 @@ using HannasHabits.Application.Habits.Commands.CreateHabit;
 using HannasHabits.Application.Habits.Commands.DeleteHabit;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
+using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 using HannasHabits.WebApi.Models;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -27,6 +28,21 @@ public class HabitsController : ControllerBase
     {
         var habits = await _mediator.Send(new GetAllHabitsQuery(), cancellationToken);
         return Ok(habits);
+    }
+
+    /// <summary>
+    /// Everything the habit grid and the "today" panel need in one call: per habit its plan, start date, the completed
+    /// days between <c>from</c> and <c>to</c> (inclusive, both required) and the current streak as of <c>asOf</c> - the
+    /// caller's local today; omitted = the server's UTC date.
+    /// </summary>
+    [HttpGet("overview")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<HabitOverviewDto>>> GetOverview(
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] DateOnly? asOf,
+        CancellationToken cancellationToken)
+    {
+        var overview = await _mediator.Send(new GetHabitsOverviewQuery(from, to, asOf), cancellationToken);
+        return Ok(overview);
     }
 
     [HttpGet("{id}")]

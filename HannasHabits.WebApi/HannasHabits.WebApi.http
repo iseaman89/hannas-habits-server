@@ -60,11 +60,12 @@ Content-Type: application/json
 
 ### Create a habit - 201 + Location header
 # schedule = planned days of the week (0 = Sunday ... 6 = Saturday); omit it for "every day".
+# startDate = first day the habit applies (yyyy-MM-dd, your local date; 2000-01-01 .. 2100-12-31); omit it for "today".
 POST {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "title": "Read 20 pages", "description": "Before bed", "schedule": [1, 2, 3, 4, 5] }
+{ "title": "Read 20 pages", "description": "Before bed", "schedule": [1, 2, 3, 4, 5], "startDate": "{{date}}" }
 
 > {%
     client.global.set("habitId", response.body.id);
@@ -72,6 +73,13 @@ Content-Type: application/json
 
 ### List habits
 GET {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+
+### Habit overview for the month grid / the "today" panel - 200
+# One call instead of 1 + N: per habit its plan, startDate, the completed days between from and to (inclusive, both
+# required, oldest first) and currentStreak as of asOf (= your local today; omitted = the server's UTC date).
+# The streak counts scheduled days in a row back from asOf, independent of from/to (it can span months).
+GET {{host}}/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf={{date}}
 Authorization: Bearer {{accessToken}}
 
 ### Get one habit

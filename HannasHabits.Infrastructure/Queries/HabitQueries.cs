@@ -2,6 +2,7 @@ using HannasHabits.Application.HabitRecords.Commands.MarkCompleted;
 using HannasHabits.Application.Habits;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
+using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 using HannasHabits.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,8 +28,21 @@ public class HabitQueries : IHabitQueries
         => _context.Habits
             .AsNoTracking()
             .Where(h => h.Id == habitId && h.UserId == userId)
-            .Select(h => new HabitDetailsDto(h.Id, h.Title.Value, h.Description, h.Schedule.Days, h.CreatedAt))
+            .Select(h => new HabitDetailsDto(
+                h.Id, h.Title.Value, h.Description, h.Schedule.Days, h.StartDate, h.CreatedAt))
             .FirstOrDefaultAsync(cancellationToken);
+
+    // Only the dates of the records are read, not the record entities: the streak needs the whole history (it can reach
+    // back past the requested month), and a date is all it needs of each.
+    public Task<List<HabitWithCompletedDates>> GetWithCompletedDatesAsync(
+        Guid userId, CancellationToken cancellationToken)
+        => _context.Habits
+            .AsNoTracking()
+            .Where(h => h.UserId == userId)
+            .OrderBy(h => h.CreatedAt).ThenBy(h => h.Id)
+            .Select(h => new HabitWithCompletedDates(
+                h.Id, h.Title.Value, h.Schedule, h.StartDate, h.Records.Select(r => r.Date).ToList()))
+            .ToListAsync(cancellationToken);
 
     public async Task<List<HabitRecordDto>?> GetRecordsAsync(
         Guid userId, Guid habitId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
