@@ -44,7 +44,7 @@ Not part of the solution (legacy, kept only as reference for porting features, t
 
 ## Work plan
 
-The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10, mockup M1, frontend F0–F9). One step per session: do the next open step, check it off, log it in `docs/PROGRESS.md`, then the user starts a fresh session. Decisions so far: repositories per aggregate root, MediatR 14 stays (free Community license key — MediatR is by Jimmy Bogard/Lucky Penny Software), TypeScript for the frontend, new design from the mockup (`docs/DESIGN.md` once created in step M1).
+The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b, mockup M1, frontend F0–F9). One step per session: do the next open step, check it off, log it in `docs/PROGRESS.md`, then the user starts a fresh session. Decisions so far: repositories per aggregate root, MediatR 14 stays (free Community license key — MediatR is by Jimmy Bogard/Lucky Penny Software), TypeScript for the frontend, new design from the mockup — **`docs/DESIGN.md`** (tokens, screens, what the UI needs from the API; read it instead of re-importing the mockup; streaks make B8 required, `Priority` is dropped).
 
 ## Git workflow
 
