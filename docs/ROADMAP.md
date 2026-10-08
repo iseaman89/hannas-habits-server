@@ -33,7 +33,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   - MediatR license key registration. Fix nullable warnings (CS8631 in `GetAllDailyDiariesQuery`, CS8618 in entities via `required`/private-ctor pattern, CS8604).
   *Done when:* zero build warnings; a request for a missing habit returns 404 ProblemDetails; browser preflight from :5173 works.
 
-- [ ] **B2 — Controllers & REST routes.**
+- [x] **B2 — Controllers & REST routes** *(done 2026-10-08, details in PROGRESS; all endpoints verified over HTTPS incl. isolation between users, `/swagger/v1/swagger.json` = 200).*
   - **Do first — blocks end-to-end testing:** the DB still has the legacy `Users` table and `FK_Habits_Users_UserId` (from `InitialCreate`; the `User` entity no longer exists in code, `dotnet ef migrations has-pending-model-changes` says the snapshot is stale). Result: `POST /api/habits` returns 500 (FK violation) for every Identity user. Add a migration that drops that FK and the `Users` table (decide: no FK, or FK to `AspNetUsers` via the entity configuration — Domain must not reference Identity) and apply it. `DailyDiary` has no such FK. Also: until the duplicate `[HttpPut]` in `HabitRecordsController` is fixed, `/swagger/v1/swagger.json` returns 500.
   - Routes — proposal (adjust if needed):
     - `POST /api/auth/{register|login|refresh|revoke|revoke-all}` (Google comes in B5)
@@ -52,7 +52,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   *Done when:* `HannasHabits.Application.csproj` has no EF Core reference; handlers never touch a DbContext.
 
 - [ ] **B4 — Domain hardening.**
-  - Move invariants into the aggregate: `Habit.MarkCompleted` rejects duplicates, `Habit.UnmarkCompleted(date)`; `DailyDiary` unique per user+date → Conflict instead of DB exception.
+  - Move invariants into the aggregate: `Habit.MarkCompleted` rejects duplicates, `Habit.UnmarkCompleted(date)`; `DailyDiary` unique per user+date → Conflict instead of DB exception. (Since B2 `MarkCompleted` is idempotent in the handler; two *concurrent* PUTs for the same day still hit the unique index → 500. Handle the race, e.g. catch the unique violation and return the existing record.)
   - Value objects (fill the empty `ValueObjects` folder): `HabitTitle`, `HabitSchedule` (set of `DayOfWeek`), later `Mood`/`Percentage`.
   - Port **habit schedules** (days of week) from the old model; validator for `Description` (max 500).
   - Consistent English domain messages; EF configuration + migration.
@@ -64,6 +64,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   - Refresh tokens stored hashed, rotation with correct `ReplacedByToken`, reuse detection, lockout on failures, `TimeProvider` instead of `DateTime.UtcNow`.
   - `POST /api/auth/google` (verify Google ID token, create/link user) — the frontend has a Google button.
   - Stable auth response contract for the frontend (user + access/refresh token + expiry).
+  - Validation errors with one key style: FluentValidation errors come back camelCase (`errors.title`), but MVC's implicit `[Required]` on non-nullable request properties produces `errors.Title` when the property is missing from the body. Add validators for the auth requests, then set `SuppressImplicitRequiredAttributeForNonNullableReferenceTypes` (or an `InvalidModelStateResponseFactory` that camelCases keys) so there is one validation path.
   *Done when:* AuthController only sends commands; tokens in DB are hashed.
 
 - [ ] **M1 — Mockup → design brief** *(needs claude_design MCP, see above).* Import the mockup, then write `docs/DESIGN.md`: screens, components, design tokens (colors, fonts, spacing), and — important — the **list of features/fields the new design needs from the API** (moods, health bars, streaks, stats, …). Later sessions read `DESIGN.md` instead of re-importing the mockup.
@@ -72,6 +73,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   *Done when:* `docs/DESIGN.md` exists and B6–B8 are adjusted to it.
 
 - [ ] **B6 — Daily diary (extended).** Old model to port (`HannaHabitsService/Models/DailyDiary.cs`, `DailyTask.cs`): mood (Domain already has `Mood` enum 1–5), physical + mental health (0–100), highlight, learned things[], grateful things[], tasks[] (title + done). Adjust to `DESIGN.md`.
+  Also: `DailyDiary.UserId` still has no FK to `AspNetUsers` (B2 only added it for `Habits`; adding it to a table with data fails on orphans). The DB holds one orphan test diary ("some text", owner = the deleted legacy user `6c6bba06-…`) — delete it first (ask the user), then add the FK like in `HabitConfiguration`. The diary routes are `/api/daily-diaries[/{id}]` by id until then.
   Routes (proposal): `GET /api/daily-diaries/{date}`, `PUT /api/daily-diaries/{date}` (upsert), `DELETE …/{date}`, `GET /api/daily-diaries?from=&to=` (calendar view: dates with entries).
   *Done when:* frontend-relevant fields roundtrip; migration applied; ids no longer needed by the frontend (date is the key).
 

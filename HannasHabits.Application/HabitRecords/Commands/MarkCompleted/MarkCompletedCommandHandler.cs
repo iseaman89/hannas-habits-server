@@ -33,10 +33,9 @@ public class MarkCompletedCommandHandler : IRequestHandler<MarkCompletedCommand,
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.HabitId);
 
-        if (habit.Records.Any(r => r.Date == request.Date))
-            throw new ConflictException($"A record for {request.Date:O} already exists.");
-
-        var record = habit.MarkCompleted(request.Date);
+        // Idempotent: marking an already completed day is not an error, the client just gets the existing record.
+        var record = habit.Records.FirstOrDefault(r => r.Date == request.Date)
+                     ?? habit.MarkCompleted(request.Date);
 
         await _context.SaveChangesAsync(cancellationToken);
 

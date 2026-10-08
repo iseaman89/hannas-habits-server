@@ -1,17 +1,19 @@
 using HannasHabits.Application.DailyDiaries.Commands.CreateDailyDiary;
 using HannasHabits.Application.DailyDiaries.Commands.DeleteDailyDiary;
-using HannasHabits.Application.DailyDiaries.Commands.UpdateDailyDiary;
 using HannasHabits.Application.DailyDiaries.Queries.GetAllDailyDiaries;
 using HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryById;
+using HannasHabits.WebApi.Models;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HannasHabits.WebApi.Controllers;
 
+// Routes are keyed by id for now; B6 redesigns the diary API around the date.
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/daily-diaries")]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 public class DailyDiariesController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -22,37 +24,47 @@ public class DailyDiariesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetDailyDiaries(GetAllDailyDiariesQuery query, CancellationToken cancellationToken)
+    public async Task<ActionResult<List<DailyDiaryListItemDto>>> GetDailyDiaries(CancellationToken cancellationToken)
     {
-        var dailyDiaries = await _mediator.Send(query, cancellationToken);
+        var dailyDiaries = await _mediator.Send(new GetAllDailyDiariesQuery(), cancellationToken);
         return Ok(dailyDiaries);
     }
-    
-    [HttpGet("id")]
-    public async Task<IActionResult> GetDailyDiaryById(GetDailyDiaryByIdQuery query, CancellationToken cancellationToken)
+
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DailyDiaryDetailsDto>> GetDailyDiaryById(Guid id,
+        CancellationToken cancellationToken)
     {
-        var dailyDiary = await _mediator.Send(query, cancellationToken);
+        var dailyDiary = await _mediator.Send(new GetDailyDiaryByIdQuery(id), cancellationToken);
         return Ok(dailyDiary);
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateDailyDiary(CreateDailyDiaryCommand command, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<CreateDailyDiaryDto>> CreateDailyDiary(CreateDailyDiaryRequest request,
+        CancellationToken cancellationToken)
     {
-       var dailyDiary = await _mediator.Send(command, cancellationToken);
-       return Ok(dailyDiary);
+        var dailyDiary = await _mediator.Send(request.ToCommand(), cancellationToken);
+        return CreatedAtAction(nameof(GetDailyDiaryById), new { id = dailyDiary.Id }, dailyDiary);
     }
 
-    [HttpPut]
-    public async Task<IActionResult> UpdateDailyDiary(UpdateDailyDiaryCommand command, CancellationToken cancellationToken)
+    [HttpPut("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateDailyDiary(Guid id, UpdateDailyDiaryRequest request,
+        CancellationToken cancellationToken)
     {
-        var unit = await _mediator.Send(command, cancellationToken);
-        return Ok(unit);
+        await _mediator.Send(request.ToCommand(id), cancellationToken);
+        return NoContent();
     }
 
-    [HttpDelete]
-    public async Task<IActionResult> DeleteDailyDiary(DeleteDailyDiaryCommand command, CancellationToken cancellationToken)
+    [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteDailyDiary(Guid id, CancellationToken cancellationToken)
     {
-        var unit = await _mediator.Send(command, cancellationToken);
-        return Ok(unit);
+        await _mediator.Send(new DeleteDailyDiaryCommand(id), cancellationToken);
+        return NoContent();
     }
 }

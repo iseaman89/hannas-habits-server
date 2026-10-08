@@ -26,14 +26,20 @@ public class GetRecordsByHabitQueryHandler : IRequestHandler<GetRecordsByHabitQu
         var userId = _userContextService.UserId;
         if (userId is null) throw new UnauthorizedAccessException();
         
-        var habit = await _context.Habits
-            .Include(h => h.Records)
-            .Where(h => h.Id == request.HabitId && h.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
+        var habitExists = await _context.Habits
+            .AnyAsync(h => h.Id == request.HabitId && h.UserId == userId.Value, cancellationToken);
 
-        if (habit is null)
+        if (!habitExists)
             throw new NotFoundException(nameof(Habit), request.HabitId);
 
-        return _mapper.Map<List<HabitRecordDto>>(habit.Records);
+        var records = await _context.HabitRecords
+            .AsNoTracking()
+            .Where(r => r.HabitId == request.HabitId)
+            .Where(r => request.From == null || r.Date >= request.From)
+            .Where(r => request.To == null || r.Date <= request.To)
+            .OrderBy(r => r.Date)
+            .ToListAsync(cancellationToken);
+
+        return _mapper.Map<List<HabitRecordDto>>(records);
     }
 }

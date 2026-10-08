@@ -1,6 +1,126 @@
-@HannasHabits.WebApi_HostAddress = http://localhost:5016
+# Manual API smoke tests (JetBrains HTTP Client syntax; response handlers store tokens/ids for the next requests).
+# Run top to bottom: register (once) or login first, then the rest.
+# Use https: the API redirects http -> https, and a CORS preflight / POST to the http URL would get a 307.
+# The ASP.NET dev certificate must be trusted: dotnet dev-certs https --trust
 
-GET {{HannasHabits.WebApi_HostAddress}}/weatherforecast/
-Accept: application/json
+@host = https://localhost:7054
+# Throw-away dev account - not a real password.
+@email = dev@example.com
+@password = Dev-Passw0rd!
+@date = 2026-10-08
 
-###
+### Register (first time only) - 200 with { user, tokens }
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Refresh the token pair
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Create a habit - 201 + Location header
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 20 pages", "description": "Before bed" }
+
+> {%
+    client.global.set("habitId", response.body.id);
+%}
+
+### List habits
+GET {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+
+### Get one habit
+GET {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Update a habit - 204
+PUT {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 30 pages", "description": "Before bed" }
+
+### Mark a day as completed - 200; repeating it returns the same record (idempotent)
+PUT {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### List records (from/to optional, inclusive)
+GET {{host}}/api/habits/{{habitId}}/records?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{accessToken}}
+
+### Unmark a day - 204 (404 if the day was not marked)
+DELETE {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Delete the habit (its records go with it) - 204
+DELETE {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Create a diary entry - 201 + Location header (B6 will key the diary by date)
+POST {{host}}/api/daily-diaries
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "date": "{{date}}", "text": "A good day." }
+
+> {%
+    client.global.set("diaryId", response.body.id);
+%}
+
+### List diary entries
+GET {{host}}/api/daily-diaries
+Authorization: Bearer {{accessToken}}
+
+### Get one diary entry
+GET {{host}}/api/daily-diaries/{{diaryId}}
+Authorization: Bearer {{accessToken}}
+
+### Update a diary entry - 204
+PUT {{host}}/api/daily-diaries/{{diaryId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "text": "A really good day." }
+
+### Delete a diary entry - 204
+DELETE {{host}}/api/daily-diaries/{{diaryId}}
+Authorization: Bearer {{accessToken}}
+
+### Revoke one refresh token - 204
+POST {{host}}/api/auth/revoke
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+### Revoke all refresh tokens of the user - 204
+POST {{host}}/api/auth/revoke-all
+Authorization: Bearer {{accessToken}}

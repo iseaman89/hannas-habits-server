@@ -12,6 +12,9 @@ public class DailyDiaryConfiguration : IEntityTypeConfiguration<DailyDiary>
         
         builder.HasKey(d => d.Id);
 
+        // The Id is assigned by EntityBase, never by the database.
+        builder.Property(d => d.Id).ValueGeneratedNever();
+
         builder.Property(d => d.Text)
             .IsRequired()
             .HasMaxLength(2000);

@@ -75,3 +75,24 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 3. Frontend must call `https://localhost:7054` in dev: http→https redirect turns a preflight to `http://localhost:5016` into a 307, and the dev cert is not trusted yet (`dotnet dev-certs https --trust` — added to "things only the user can do").
 
 **Next:** B2 — Controllers & REST routes (start with the migration).
+
+## 2026-10-08 — B2 done (controllers & REST routes)
+
+**Done:**
+- **Migration `RemoveLegacyUsersAddHabitUserForeignKey`** (applied): drops `FK_Habits_Users_UserId` + the legacy `Users` table (1 legacy test row lost), adds `FK_Habits_AspNetUsers_UserId` (cascade). Decision: FK *to Identity's table*, configured in `HabitConfiguration` via `HasOne<ApplicationUser>().WithMany()` — Domain stays free of Identity, the DB guarantees referential integrity and deleting a user deletes their habits + records (verified). Snapshot is in sync again.
+- **Migration `ClientGeneratedGuidKeys`** (applied, empty `Up`): `Id` is `ValueGeneratedNever()` in all three entity configurations. Reason: `EntityBase` assigns `Guid.NewGuid()` in the constructor; for a new `HabitRecord` that only reaches the context through the tracked `Habit.Records`, EF assumed "already exists" and issued an UPDATE → `DbUpdateConcurrencyException` (every `PUT …/records` returned 500, a bug older than B2).
+- **Routes** (explicit lowercase, ids from route, payload from body via small request records in `WebApi/Models` with `ToCommand(...)`): `/api/auth/*`, `/api/habits[/{id}]`, `/api/habits/{habitId}/records[/{date}]`, `/api/daily-diaries[/{id}]`. `201 Created` + `Location` for POST, `204` for PUT/DELETE, `[ProducesResponseType]` everywhere; no body on GET/DELETE, no literal `[HttpGet("id")]`. Swagger JSON works again (200; was 500 from the duplicate `[HttpPut]`).
+- **Records:** `GET …/records?from=&to=` (inclusive, optional, validated `from <= to`, filtered in the DB, ordered by date, `AsNoTracking`). `PUT …/records/{date}` is now idempotent (existing record is returned, `200`) instead of 409. `DELETE` of a day that is not marked stays 404.
+- **Small fixes found while testing:** `HabitDetailsDto.CreatedAt` was `DateOnly` but the entity has `DateTime` → Mapster `InvalidCastException` (500 on `GET /api/habits/{id}`); now `DateTime` (UTC instant, no time-zone guessing). `CreateDailyDiaryDto` got an `Id` (needed for `Location`), `UpdateDailyDiaryCommand.Date` removed (the handler never used it).
+- `HannasHabits.WebApi.http` rewritten: register/login/refresh → habits → records → diary → revoke (JetBrains HTTP Client syntax, response handlers store tokens/ids; host `https://localhost:7054`).
+
+**Verified** (API on https profile, curl -k, throw-away users deleted afterwards incl. refresh tokens): full CRUD of habits/records/diaries with correct status codes, 400 (bad guid/date, `from > to`, empty title), 404 (unknown id), 401 (no token); user B gets 404 for every operation on user A's habit/records and an empty list; deleting user A removes their habit and records. DB is back to its previous state (1 user, 0 habits, 2 diaries).
+**Not verified:** the `.http` file itself (no IDE here; it mirrors the curl calls). Dev certificate is still untrusted, so browsers/Rider's client may complain until `dotnet dev-certs https --trust`.
+
+**Findings → ROADMAP:**
+1. Validation key style differs: FluentValidation → `errors.title`, MVC implicit `[Required]` (property missing in body) → `errors.Title` (B5 note).
+2. Two concurrent `PUT …/records/{date}` for the same day still hit the unique index → 500 (B4 note).
+3. `DailyDiary.UserId` has no FK yet; one orphan test diary of the deleted legacy user blocks it (B6 note, needs the user's OK to delete).
+4. `AuthController` still answers `400 "Invalid credentials"` as plain string for a failed login (should be 401 ProblemDetails) — B5 moves it into commands anyway.
+
+**Next:** B3 — Repositories, Unit of Work, current user.

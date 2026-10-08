@@ -12,6 +12,10 @@ public class HabitRecordConfiguration : IEntityTypeConfiguration<HabitRecord>
         
         builder.HasKey(r => r.Id);
 
+        // The Id is assigned by EntityBase, never by the database. Without this EF treats a new entity that only
+        // reaches the context through a tracked parent's collection as already existing (UPDATE instead of INSERT).
+        builder.Property(r => r.Id).ValueGeneratedNever();
+
         builder.Property(r => r.Date)
             .IsRequired();
 

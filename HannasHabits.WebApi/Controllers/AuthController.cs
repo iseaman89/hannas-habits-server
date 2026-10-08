@@ -15,7 +15,7 @@ using RegisterRequest = HannasHabits.WebApi.Models.RegisterRequest;
 namespace HannasHabits.WebApi.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -36,6 +36,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         var exists = await _userManager.FindByEmailAsync(req.Email);
@@ -52,6 +53,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
         var user = await _userManager.FindByEmailAsync(req.Email);
@@ -67,6 +69,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
     {
         var pair = await _tokenService.RefreshAsync(req.RefreshToken, HttpContext.Connection.RemoteIpAddress?.ToString());
@@ -77,6 +80,8 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("revoke")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Revoke([FromBody] RevokeRequest req)
     {
         var ok = await _tokenService.RevokeRefreshTokenAsync(req.RefreshToken, HttpContext.Connection.RemoteIpAddress?.ToString());
@@ -85,6 +90,7 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("revoke-all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RevokeAll()
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);

@@ -9,7 +9,9 @@ namespace HannasHabits.WebApi.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/habits/{habitId}/records")]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
 public class HabitRecordsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -19,25 +21,30 @@ public class HabitRecordsController : ControllerBase
         _mediator = mediator;
     }
 
+    /// <summary>Completed days of a habit, oldest first. <c>from</c>/<c>to</c> are inclusive and optional.</summary>
     [HttpGet]
-    public async Task<IActionResult> GetRecordsByHabit(GetRecordsByHabitQuery query,
-        CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<HabitRecordDto>>> GetRecords(Guid habitId,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
-        var habitRecords = await _mediator.Send(query, cancellationToken);
-        return Ok(habitRecords);
+        var records = await _mediator.Send(new GetRecordsByHabitQuery(habitId, from, to), cancellationToken);
+        return Ok(records);
     }
 
-    [HttpPut]
-    public async Task<IActionResult> MarkCompleted(MarkCompletedCommand command, CancellationToken cancellationToken)
+    /// <summary>Marks the day as completed. Idempotent: marking an already completed day returns the existing record.</summary>
+    [HttpPut("{date}")]
+    public async Task<ActionResult<HabitRecordDto>> MarkCompleted(Guid habitId, DateOnly date,
+        CancellationToken cancellationToken)
     {
-        var habitRecord = await _mediator.Send(command, cancellationToken);
-        return Ok(habitRecord);
+        var record = await _mediator.Send(new MarkCompletedCommand(habitId, date), cancellationToken);
+        return Ok(record);
     }
-    
-    [HttpPut]
-    public async Task<IActionResult> UnmarkCompleted(UnmarkCompletedCommand command, CancellationToken cancellationToken)
+
+    [HttpDelete("{date}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> UnmarkCompleted(Guid habitId, DateOnly date, CancellationToken cancellationToken)
     {
-        var unit = await _mediator.Send(command, cancellationToken);
-        return Ok(unit);
+        await _mediator.Send(new UnmarkCompletedCommand(habitId, date), cancellationToken);
+        return NoContent();
     }
 }
