@@ -18,7 +18,7 @@ This is a **learning project**. Clean Code, DDD and Clean Architecture are used 
 | Part | Path | Remote |
 |---|---|---|
 | Backend (.NET 8) — this repo | `/Users/iseaman/RiderProjects/HannasHabits` | `iseaman89/hannas-habits-server` |
-| Frontend (React 18 + Vite 6 + Tailwind 4; **TypeScript** (strict) since F1, design system in `src/shared/ui` since F2, app skeleton since F3 — `src/app` + `src/features/*`, one typed API client, the auth session; login/register/Google screen since F4, habit month tracker since F5, daily diary with autosave since F6, year calendar since F7, resolutions since F8; the old UI is gone except an unused `Sidebar.jsx` and a few assets that F9 deletes) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
+| Frontend (React 18 + Vite 6 + Tailwind 4; **TypeScript** (strict) since F1, design system in `src/shared/ui` since F2, app skeleton since F3 — `src/app` + `src/features/*`, one typed API client, the auth session; login/register/Google screen since F4, habit month tracker since F5, daily diary with autosave since F6, year calendar since F7, resolutions since F8; polish & delivery since F9 — small-screen shell, skeletons, start-up/unreachable/crash pages, nginx hardening; the old UI is gone; **the roadmap F0–F9 is finished**, what is left is the user's own list and the look in a browser) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
 
 The frontend is a separate git repo outside this working directory. Add it with `--add-dir` / `/add-dir` when working on it; where `/add-dir` is unavailable, work on it with absolute paths via Bash/Read/Edit (done for F0). It has its own short `CLAUDE.md` that points back here.
 
