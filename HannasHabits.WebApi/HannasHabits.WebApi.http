@@ -10,10 +10,11 @@
 @date = 2026-10-08
 
 ### Register (first time only) - 200 with { user, tokens }; 409 if the email exists, 400 for a weak password
+# displayName is optional (max 100 chars, trimmed); user.displayName falls back to the email's local part.
 POST {{host}}/api/auth/register
 Content-Type: application/json
 
-{ "email": "{{email}}", "password": "{{password}}" }
+{ "email": "{{email}}", "password": "{{password}}", "displayName": "Dev User" }
 
 > {%
     client.global.set("accessToken", response.body.tokens.accessToken);

@@ -88,7 +88,7 @@ All dates are the **client's local date** as `yyyy-MM-dd` (date-fns, never `toIS
 Split screen: left a hero ("Hanna's Habits", tagline "Daily reflections, habits, and goals in one place.", three tags Daily diary / Habits / Resolutions) over decorative circles (terracotta-200, sage-200, a small sage-500 dot); right a card with the form. Light/dark switch top right.
 - Login: Email, Password, **Log in**, divider "or", **Continue with Google**, link "New here? Create an account".
 - Register adds a field **Your name** (→ display name) and the button reads **Create account**.
-- Needs from the API: `AuthResult` (exists) + **display name** (new, B5b).
+- Needs from the API: `AuthResult` (exists) + **display name** (done, B5b).
 - Not designed: field validation errors, 401 / 409 / 429 (lockout) messages, loading state, forgot password. Use the same pill inputs with the error text under the field and a form-level message from the ProblemDetails `title`/`detail`.
 
 ### 4.2 Today / daily diary (`/diary/:date`)
@@ -131,7 +131,7 @@ Legend: **exists** · **change** (exists, needs a change) · **new**.
 | Need (screen) | Status | Where |
 |---|---|---|
 | Register/login/Google/refresh/revoke, `AuthResult { user, tokens }` | exists | B5 |
-| **Display name** (register field "Your name", sidebar): `displayName` on `RegisterCommand` (optional), from the Google `name` claim, in `AuthResult.user` (`{ id, userName, email, displayName }`) | new | **B5b** |
+| **Display name** (register field "Your name", sidebar): `displayName` on `RegisterCommand` (optional), from the Google `name` claim, in `AuthResult.user` (`{ id, userName, email, displayName }`) | done | **B5b** |
 | Habits CRUD, `schedule: number[]` (0 = Sunday), mark/unmark `PUT/DELETE …/records/{date}` | exists | B2/B4 |
 | Habits **overview** in one call for the month grid and the Today panel: `GET /api/habits/overview?from=&to=&asOf=` → `[{ id, title, schedule, startDate, completedDates[], currentStreak }]`. Grid: `from/to` = month; Today panel: `from = to = viewed date` (client filters by schedule). One query instead of 1 + N requests; streak must be server-side because it can span months. | new | **B8** |
 | **Current streak** (pure domain logic): walk back from `asOf` over *scheduled* days only; unscheduled days neither count nor break; `asOf` itself counts if done and is ignored (not a break) if still open; the first earlier scheduled day that is not done ends the streak; stop at `startDate`. | new | **B8** |

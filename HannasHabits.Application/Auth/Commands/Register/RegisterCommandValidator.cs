@@ -16,5 +16,9 @@ public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
         RuleFor(x => x.Password)
             .NotEmpty()
             .MaximumLength(AuthLimits.PasswordMaxLength);
+
+        // Optional; blank is fine (the account then shows the email's local part). Trimming happens in the Identity layer.
+        RuleFor(x => x.DisplayName)
+            .MaximumLength(AuthLimits.DisplayNameMaxLength);
     }
 }

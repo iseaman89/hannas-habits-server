@@ -69,7 +69,7 @@ public class JwtTokenService : IJwtTokenService
 
         var appUser = await _userManager.FindByIdAsync(stored.UserId.ToString())
                       ?? throw new AuthenticationFailedException(InvalidRefreshToken);
-        var user = new IdentityUserDto(appUser.Id, appUser.UserName ?? appUser.Email ?? "", appUser.Email ?? "");
+        var user = appUser.ToDto();
 
         var (newToken, replacement) = NewRefreshToken(stored.UserId, now);
         stored.Rotate(replacement, now);

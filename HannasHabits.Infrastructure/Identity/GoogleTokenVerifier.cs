@@ -44,6 +44,6 @@ public class GoogleTokenVerifier : IGoogleTokenVerifier
         if (!payload.EmailVerified || string.IsNullOrWhiteSpace(payload.Email))
             throw new AuthenticationFailedException("The Google account has no verified email address.");
 
-        return new ExternalIdentity(Provider, payload.Subject, payload.Email);
+        return new ExternalIdentity(Provider, payload.Subject, payload.Email, payload.Name);
     }
 }

@@ -30,9 +30,9 @@ public class IdentityService : IIdentityService
         _db = db;
     }
 
-    public async Task<IdentityUserDto> RegisterAsync(string email, string password, CancellationToken cancellationToken = default)
+    public async Task<IdentityUserDto> RegisterAsync(string email, string password, string? displayName, CancellationToken cancellationToken = default)
     {
-        var user = NewUser(email);
+        var user = NewUser(email, displayName);
 
         IdentityResult result;
         try
@@ -47,7 +47,7 @@ public class IdentityService : IIdentityService
 
         ThrowIfFailed(result);
 
-        return ToDto(user);
+        return user.ToDto();
     }
 
     public async Task<IdentityUserDto> AuthenticateAsync(string email, string password, CancellationToken cancellationToken = default)
@@ -65,16 +65,19 @@ public class IdentityService : IIdentityService
         if (!result.Succeeded)
             throw new AuthenticationFailedException(InvalidCredentials);
 
-        return ToDto(user);
+        return user.ToDto();
     }
 
     public async Task<IdentityUserDto> SignInWithExternalAsync(ExternalIdentity identity, CancellationToken cancellationToken = default)
     {
         var existing = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
         if (existing is not null)
-            return ToDto(existing);
+        {
+            await FillMissingDisplayNameAsync(existing, identity.DisplayName);
+            return existing.ToDto();
+        }
 
-        var user = NewUser(identity.Email);
+        var user = NewUser(identity.Email, identity.DisplayName);
         user.EmailConfirmed = true; // Google verified it (the verifier rejects tokens without a verified email)
 
         try
@@ -94,7 +97,7 @@ public class IdentityService : IIdentityService
             // other request was faster; Identity's duplicate check or the unique index tells us) or by somebody else.
             var winner = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
             if (winner is not null)
-                return ToDto(winner);
+                return winner.ToDto();
 
             // No silent linking by email. Registration does not confirm email addresses, so anybody could have created
             // a password account for somebody else's address in advance; linking the real owner's Google login to it
@@ -103,13 +106,36 @@ public class IdentityService : IIdentityService
             throw new ConflictException("An account with this email address already exists. Sign in with your password instead.", exception);
         }
 
-        return ToDto(user);
+        return user.ToDto();
     }
 
-    private static ApplicationUser NewUser(string email) => new() { Id = Guid.NewGuid(), Email = email, UserName = email };
+    private static ApplicationUser NewUser(string email, string? displayName)
+    {
+        var user = new ApplicationUser { Id = Guid.NewGuid(), Email = email, UserName = email };
+        user.SetDisplayName(displayName);
+        return user;
+    }
 
-    private static IdentityUserDto ToDto(ApplicationUser user) =>
-        new(user.Id, user.UserName ?? user.Email ?? "", user.Email ?? "");
+    // Accounts created by a Google sign-in before display names existed have none. The name is cosmetic, so this is best
+    // effort: it is only filled in, never overwritten (the user may choose their own name later), and a failed update -
+    // e.g. a parallel sign-in that was faster - must not fail the login. The next sign-in tries again.
+    private async Task FillMissingDisplayNameAsync(ApplicationUser user, string? providerName)
+    {
+        if (user.DisplayName is not null)
+            return;
+
+        user.SetDisplayName(providerName);
+        if (user.DisplayName is null)
+            return;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            // The failed update leaves the user "modified" in this scope's context; the token service saves the same
+            // context right after us and would trip over it (and write the name through the back door).
+            _db.Entry(user).State = EntityState.Detached;
+        }
+    }
 
     private static bool IsUniqueViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
