@@ -1,4 +1,6 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Domain.Entities;
 using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +29,7 @@ public class GetDailyDiaryByIdQueryHandler : IRequestHandler<GetDailyDiaryByIdQu
             .Where(d => d.Id == request.Id && d.UserId == userId.Value)
             .FirstOrDefaultAsync(cancellationToken);
         
-        if (dailyDiary is null) throw new Exception("DailyDiary not found");
+        if (dailyDiary is null) throw new NotFoundException(nameof(DailyDiary), request.Id);
         
         return _mapper.Map<DailyDiaryDetailsDto>(dailyDiary);
     }

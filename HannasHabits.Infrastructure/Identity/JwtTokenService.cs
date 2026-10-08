@@ -6,14 +6,13 @@ using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace HannasHabits.Infrastructure.Identity;
 
 public class JwtTokenService : IJwtTokenService
 {
-    private readonly IConfiguration _config;
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly TimeSpan _accessTokenLifetime;
@@ -23,19 +22,19 @@ public class JwtTokenService : IJwtTokenService
     private readonly string _secretKey;
 
     public JwtTokenService(
-        IConfiguration config,
+        IOptions<JwtOptions> options,
         ApplicationDbContext db,
         UserManager<ApplicationUser> userManager)
     {
-        _config = config;
         _db = db;
         _userManager = userManager;
 
-        _accessTokenLifetime = TimeSpan.FromMinutes(_config.GetValue<int>("Jwt:AccessMinutes", 15));
-        _refreshTokenLifetime = TimeSpan.FromDays(_config.GetValue<int>("Jwt:RefreshDays", 30));
-        _issuer = _config["Jwt:Issuer"]!;
-        _audience = _config["Jwt:Audience"]!;
-        _secretKey = _config["Jwt:Key"]!;
+        var jwt = options.Value;
+        _accessTokenLifetime = TimeSpan.FromMinutes(jwt.AccessMinutes);
+        _refreshTokenLifetime = TimeSpan.FromDays(jwt.RefreshDays);
+        _issuer = jwt.Issuer;
+        _audience = jwt.Audience;
+        _secretKey = jwt.Key;
     }
 
     private string CreateAccessToken(ApplicationUser user, out DateTime expires)
@@ -67,7 +66,7 @@ public class JwtTokenService : IJwtTokenService
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
     }
 
-    public async Task<TokenPair> CreateTokenPairAsync(IdentityUserDto dto, string? ipAddress = null!)
+    public async Task<TokenPair> CreateTokenPairAsync(IdentityUserDto dto, string? ipAddress = null)
     {
         var user = await _userManager.FindByIdAsync(dto.Id.ToString()) ?? throw new InvalidOperationException("User not found");
 
@@ -89,7 +88,7 @@ public class JwtTokenService : IJwtTokenService
         return new TokenPair(accessToken, refreshToken, accessExp, refreshExp);
     }
 
-    public async Task<TokenPair?> RefreshAsync(string refreshToken, string ipAddress = null!)
+    public async Task<TokenPair?> RefreshAsync(string refreshToken, string? ipAddress = null)
     {
         var rt = await _db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken);
         if (rt == null || rt.IsRevoked || rt.ExpiresAt <= DateTime.UtcNow)
@@ -121,7 +120,7 @@ public class JwtTokenService : IJwtTokenService
         return new TokenPair(accessToken, refreshTokenNew, accessExp, refreshExp);
     }
 
-    public async Task<bool> RevokeRefreshTokenAsync(string refreshToken, string ipAddress = null!)
+    public async Task<bool> RevokeRefreshTokenAsync(string refreshToken, string? ipAddress = null)
     {
         var rt = await _db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken);
         if (rt == null || rt.IsRevoked) return false;

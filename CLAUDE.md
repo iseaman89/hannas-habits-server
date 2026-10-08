@@ -56,6 +56,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10, mockup M
 ## Configuration & secrets
 
 - Secrets live in `dotnet user-secrets` of `HannasHabits.WebApi` (only loaded when `ASPNETCORE_ENVIRONMENT=Development`; production uses env vars): `ConnectionStrings:DbConnection` (PostgreSQL), `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `MediatR:LicenseKey` (free Community key, expires 2027-10-08). `appsettings.json` holds only non-secret defaults. Never commit secrets, passwords or `client_secret*.json` files.
+- Non-secret config: `Cors:AllowedOrigins` (array; Development: `http://localhost:5173` in `appsettings.Development.json`; production via env vars `Cors__AllowedOrigins__0`, …; empty = no cross-origin access). The `Jwt:` section is bound to `JwtOptions` and validated on startup (`Jwt:Key` ≥ 32 chars; optional `Jwt:AccessMinutes` default 15, `Jwt:RefreshDays` default 30).
 - Show secrets only masked (`dotnet user-secrets list | sed -E 's/=.*/= <hidden>/'`).
 - Running `dotnet ef` against the real DB needs `ASPNETCORE_ENVIRONMENT=Development`.
 

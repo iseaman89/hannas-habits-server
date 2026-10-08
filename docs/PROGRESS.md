@@ -55,3 +55,23 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 - Git rules agreed with the user (now in CLAUDE.md "Git workflow"): commits allowed after a finished step, **only on `dev`, never push**.
 - Backend: branch `dev` already existed and was checked out; B0 + docs committed there.
 - Frontend: no `dev` existed → created `dev` from `origin/main` (local `main` is 6 commits behind; upstream already removed `client_secret_*.json` and rewrote the README). Did **not** switch branches or touch the user's uncommitted WIP; F0 handles that.
+
+## 2026-10-08 — B1 done (foundations)
+
+**Done:**
+- **Exceptions:** `DomainException` (Domain), `NotFoundException` / `ConflictException` / `ForbiddenException` (Application/Common/Exceptions). All 10 `throw new Exception("… not found")` in the handlers replaced. Entities throw `DomainException` (was `ArgumentException`) with English messages. Other users' data is reported as 404, not 403, on purpose (don't leak existence) → `ForbiddenException` has no user yet.
+- **`GlobalExceptionHandler`** (`IExceptionHandler` + `IProblemDetailsService`, WebApi/ExceptionHandling): `ValidationException`→400 (`errors` keyed camelCase, so they map to form fields), `DomainException`→400, NotFound→404, Conflict→409, Forbidden→403, `UnauthorizedAccessException`→401, anything else→500 *without* details (logged at Error). Needed `Logging:LogLevel:Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware = None` in `appsettings.json`: .NET 8's middleware logs every exception as Error even when an `IExceptionHandler` handled it (fixed in .NET 9), our handler logs instead.
+- **WebApi composition root:** new `HannasHabits.WebApi/DependencyInjection.cs` (`AddWebApi`) like the other layers; `Program.cs` is now ~25 lines. CORS from `Cors:AllowedOrigins` (Development: `http://localhost:5173`; empty = nothing allowed), `UseHttpsRedirection`, Swagger with JWT bearer scheme.
+- **`JwtOptions`** (Infrastructure/Identity) via options pattern + data annotations + `ValidateOnStart` (`Key` ≥ 32 chars, `AccessMinutes` default 15, `RefreshDays` default 30). `JwtTokenService` and the JwtBearer setup both read `IOptions<JwtOptions>` instead of `IConfiguration`. Verified: a 5-char key makes the app refuse to start with an `OptionsValidationException`.
+- **MediatR license key** read from `MediatR:LicenseKey`; startup log confirms "valid license key … Community edition, expires 2027-10-08".
+- **Warnings 8 → 0:** `GetAllDailyDiariesQuery` returned `List<…>?` but its handler `List<…>`; entities `Title`/`Text` via `[MemberNotNull]` on the setter method + `= null!` in the EF-only private ctor (comment says so; B4's value objects will replace this); `ipAddress` parameters `string? = null` instead of `string = null!`.
+
+**Verified at runtime** (API on https profile, throw-away user, deleted again afterwards): missing habit → 404 `application/problem+json`; empty title → 400 with `errors.title`; no token → 401; preflight from `http://localhost:5173` → 204 + `access-control-allow-origin`, from a foreign origin → no CORS header; Swagger JSON contains the `Bearer` scheme + global requirement.
+**Not verified over HTTP** (not reachable yet, covered by B9 tests): 409/403, `DomainException`→400, 401 from `UnauthorizedAccessException`.
+
+**Findings for the next steps (also in ROADMAP):**
+1. **Blocker for B2:** the DB still has the legacy `Users` table and `FK_Habits_Users_UserId`; `POST /api/habits` → 500 (FK violation) for every real user. Model snapshot is stale (`has-pending-model-changes` = true). Needs a migration (now first bullet of B2). I did not create/apply one in B1 (scope + it's a DB design decision: no FK vs. FK to `AspNetUsers`).
+2. `HabitRecordsController` has two `[HttpPut]` without route → `/swagger/v1/swagger.json` returns 500, so the Swagger page didn't work before either. (I checked the Bearer scheme with a temporary `ResolveConflictingActions`, removed again.) Also `GET /api/habits` returns 415 (binds the query from the body). Both are B2.
+3. Frontend must call `https://localhost:7054` in dev: http→https redirect turns a preflight to `http://localhost:5016` into a 307, and the dev cert is not trusted yet (`dotnet dev-certs https --trust` — added to "things only the user can do").
+
+**Next:** B2 — Controllers & REST routes (start with the migration).

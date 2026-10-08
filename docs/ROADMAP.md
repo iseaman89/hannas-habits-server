@@ -6,7 +6,7 @@ Work plan to finish Hanna's Habits. One step = one session. Check the box when d
 
 Decisions already made (see CLAUDE.md): learning project (Clean Architecture/DDD/SOLID on purpose), repositories per aggregate root, MediatR 14 stays (free Community license key), frontend moves to TypeScript, new design from the mockup.
 
-**Every step ends with:** build green (`dotnet build` / `npm run build` + lint), tests green if any exist, ROADMAP box checked, PROGRESS entry written. Commit only when the user asks.
+**Every step ends with:** build green (`dotnet build` / `npm run build` + lint), tests green if any exist, ROADMAP box checked, PROGRESS entry written. Then commit locally on `dev` (see CLAUDE.md "Git workflow"); never push.
 
 ## Things only the user can do (Claude cannot)
 
@@ -16,6 +16,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
 - [x] *(done 2026-10-08: user created a new secret and deleted the leaked one)* Rotate the Google OAuth client secret in Google Cloud Console. The same secret is public in **two** places: `client_secret_*.json` in `hannas-habits-ui` and `UserService/appsettings.json` in `hannas-habits-server`. (It was also printed once in a Claude terminal session on 2026-10-08.) The new backend/frontend do not need the secret for ID-token login — only the client id.
 - [x] *(done 2026-10-08, key stored; **expires 2027-10-08 — renew the free Community key then**)* Register the free MediatR Community license key at https://luckypennysoftware.com (pricing page → Community) and store it as user-secret `MediatR:LicenseKey` (B1 reads this config key; production: env var `MediatR__LicenseKey`).
 - [ ] Connect the `claude_design` MCP (`/design-login`) before step M1 — it is not available in every session.
+- [ ] Trust the ASP.NET dev certificate once (`dotnet dev-certs https --trust`, asks for the macOS password) before F3. The API redirects http→https (`UseHttpsRedirection`) and a CORS preflight to the http URL gets a 307, so the frontend must call `https://localhost:7054` — and the browser rejects that until the certificate is trusted.
 
 ---
 
@@ -24,7 +25,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
 - [x] **B0 — Hygiene & secrets** *(done 2026-10-08; the legacy projects' `appsettings.json` still contain the old password until B10 — rotating the password is what actually fixes it).* Extend `.gitignore` (`.idea/`, `.DS_Store`), untrack IDE/OS files, remove the DB password from `HannasHabits.WebApi/appsettings.json` (move to user-secrets), delete the unused unsalted `PasswordHasher` + `IPasswordHasher` + DI line, delete commented-out old DbContext, remove stale config sections (`JwtSettings`, `Serilog`).
   *Done when:* app still builds and starts with the secret from user-secrets; no password in tracked files of the new projects.
 
-- [ ] **B1 — Foundations.**
+- [x] **B1 — Foundations** *(done 2026-10-08, details in PROGRESS; verified at runtime: 404/400 ProblemDetails, CORS preflight from :5173, JwtOptions fail-fast, MediatR license accepted. Swagger Authorize scheme verified, but the Swagger page itself only works after B2 fixes the duplicate `[HttpPut]`).*
   - Exceptions: `DomainException`, `NotFoundException`, `ConflictException`, `ForbiddenException` in Application/Domain; replace every `throw new Exception("... not found")`.
   - Global `IExceptionHandler` → `ProblemDetails` (ValidationException→400 with errors, NotFound→404, Conflict→409, Unauthorized→401, unhandled→500 without details).
   - CORS (allowed origins from config, dev: `http://localhost:5173`), HTTPS redirection, Swagger with JWT bearer button.
@@ -32,11 +33,13 @@ Both GitHub repos are **public** (checked 2026-10-08).
   - MediatR license key registration. Fix nullable warnings (CS8631 in `GetAllDailyDiariesQuery`, CS8618 in entities via `required`/private-ctor pattern, CS8604).
   *Done when:* zero build warnings; a request for a missing habit returns 404 ProblemDetails; browser preflight from :5173 works.
 
-- [ ] **B2 — Controllers & REST routes.** Proposal (adjust if needed):
-  - `POST /api/auth/{register|login|refresh|revoke|revoke-all}` (Google comes in B5)
-  - `GET /api/habits`, `GET /api/habits/{id}`, `POST /api/habits`, `PUT /api/habits/{id}`, `DELETE /api/habits/{id}`
-  - `GET /api/habits/{habitId}/records?from=&to=`, `PUT /api/habits/{habitId}/records/{date}` (idempotent mark), `DELETE /api/habits/{habitId}/records/{date}`
-  - Diary routes are designed in B6.
+- [ ] **B2 — Controllers & REST routes.**
+  - **Do first — blocks end-to-end testing:** the DB still has the legacy `Users` table and `FK_Habits_Users_UserId` (from `InitialCreate`; the `User` entity no longer exists in code, `dotnet ef migrations has-pending-model-changes` says the snapshot is stale). Result: `POST /api/habits` returns 500 (FK violation) for every Identity user. Add a migration that drops that FK and the `Users` table (decide: no FK, or FK to `AspNetUsers` via the entity configuration — Domain must not reference Identity) and apply it. `DailyDiary` has no such FK. Also: until the duplicate `[HttpPut]` in `HabitRecordsController` is fixed, `/swagger/v1/swagger.json` returns 500.
+  - Routes — proposal (adjust if needed):
+    - `POST /api/auth/{register|login|refresh|revoke|revoke-all}` (Google comes in B5)
+    - `GET /api/habits`, `GET /api/habits/{id}`, `POST /api/habits`, `PUT /api/habits/{id}`, `DELETE /api/habits/{id}`
+    - `GET /api/habits/{habitId}/records?from=&to=`, `PUT /api/habits/{habitId}/records/{date}` (idempotent mark), `DELETE /api/habits/{habitId}/records/{date}`
+    - Diary routes are designed in B6.
   - Route/body split: ids from route, payload from body (small request models in WebApi → map to commands); `201 Created` + `Location`, `204 NoContent` for update/delete; `[ProducesResponseType]`.
   - Replace the weatherforecast template in `HannasHabits.WebApi.http` with real requests (register → login → habits → records).
   *Done when:* every endpoint is callable from Swagger / the `.http` file; no `[HttpGet("id")]`, no body on GET/DELETE.

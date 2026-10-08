@@ -1,4 +1,6 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Domain.Entities;
 using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +29,7 @@ public class GetHabitByIdQueryHandler : IRequestHandler<GetHabitByIdQuery, Habit
             .Where(h => h.Id == request.Id && h.UserId == userId.Value)
             .FirstOrDefaultAsync(cancellationToken);
         
-        if (habit is null) throw new Exception("Habit not found");
+        if (habit is null) throw new NotFoundException(nameof(Habit), request.Id);
         
         return _mapper.Map<HabitDetailsDto>(habit);
     }

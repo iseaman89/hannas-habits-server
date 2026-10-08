@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using HannasHabits.Domain.Common;
+using HannasHabits.Domain.Exceptions;
 
 namespace HannasHabits.Domain.Entities;
 
@@ -8,7 +10,8 @@ public class DailyDiary : EntityBase
     public DateOnly Date { get; private set; }
     public string Text { get; private set; }
 
-    private DailyDiary() { }
+    // Parameterless constructor for EF Core only; it overwrites the value after materialization.
+    private DailyDiary() { Text = null!; }
 
     private DailyDiary(Guid userId, DateOnly date, string text)
     {
@@ -25,10 +28,11 @@ public class DailyDiary : EntityBase
         SetText(newText);
     }
 
+    [MemberNotNull(nameof(Text))]
     private void SetText(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            throw new ArgumentException("Текст не може бути пустим");
+            throw new DomainException("A diary text must not be empty.");
 
         Text = text.Trim();
     }

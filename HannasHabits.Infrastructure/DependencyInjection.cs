@@ -25,6 +25,11 @@ public static class DependencyInjection
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IApplicationDbContext>(provider =>

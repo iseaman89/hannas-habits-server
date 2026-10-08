@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using HannasHabits.Domain.Common;
+using HannasHabits.Domain.Exceptions;
 
 namespace HannasHabits.Domain.Entities;
 
@@ -11,7 +13,8 @@ public class Habit : EntityBase
     private readonly List<HabitRecord> _records = new();
     public IReadOnlyCollection<HabitRecord> Records => _records;
 
-    private Habit() { }
+    // Parameterless constructor for EF Core only; it overwrites the value after materialization.
+    private Habit() { Title = null!; }
 
     private Habit(Guid userId, string title, string? description)
     {
@@ -39,10 +42,11 @@ public class Habit : EntityBase
         Description = desc;
     }
 
+    [MemberNotNull(nameof(Title))]
     private void SetTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Назва звички не може бути порожньою");
+            throw new DomainException("A habit title must not be empty.");
 
         Title = title.Trim();
     }

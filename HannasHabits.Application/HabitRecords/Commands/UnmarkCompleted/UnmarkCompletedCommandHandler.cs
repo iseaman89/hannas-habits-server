@@ -1,4 +1,6 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,12 +28,12 @@ public class UnmarkCompletedCommandHandler : IRequestHandler<UnmarkCompletedComm
             .FirstOrDefaultAsync(cancellationToken);
 
         if (habit is null)
-            throw new Exception("Habit not found");
+            throw new NotFoundException(nameof(Habit), request.HabitId);
 
         var record = habit.Records.FirstOrDefault(r => r.Date == request.Date);
 
         if (record is null)
-            throw new Exception("Record not found for this date");
+            throw new NotFoundException(nameof(HabitRecord), request.Date.ToString("O"));
 
         _context.HabitRecords.Remove(record);
 

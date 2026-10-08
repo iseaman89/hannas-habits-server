@@ -1,4 +1,6 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Domain.Entities;
 using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -29,10 +31,10 @@ public class MarkCompletedCommandHandler : IRequestHandler<MarkCompletedCommand,
             .FirstOrDefaultAsync(cancellationToken);
 
         if (habit is null)
-            throw new Exception("Habit not found");
-        
+            throw new NotFoundException(nameof(Habit), request.HabitId);
+
         if (habit.Records.Any(r => r.Date == request.Date))
-            throw new Exception("Record for this date already exists");
+            throw new ConflictException($"A record for {request.Date:O} already exists.");
 
         var record = habit.MarkCompleted(request.Date);
 

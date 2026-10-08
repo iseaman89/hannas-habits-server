@@ -4,8 +4,8 @@ public record TokenPair(string AccessToken, string RefreshToken, DateTime Access
 
 public interface IJwtTokenService
 {
-    Task<TokenPair> CreateTokenPairAsync(IdentityUserDto user, string? ipAddress = null!);
-    Task<TokenPair?> RefreshAsync(string refreshToken, string ipAddress = null!);
-    Task<bool> RevokeRefreshTokenAsync(string refreshToken, string ipAddress = null!);
+    Task<TokenPair> CreateTokenPairAsync(IdentityUserDto user, string? ipAddress = null);
+    Task<TokenPair?> RefreshAsync(string refreshToken, string? ipAddress = null);
+    Task<bool> RevokeRefreshTokenAsync(string refreshToken, string? ipAddress = null);
     Task RevokeAllForUserAsync(Guid userId);
 }

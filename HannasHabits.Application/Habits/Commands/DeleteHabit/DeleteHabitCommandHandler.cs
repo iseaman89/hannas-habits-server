@@ -1,4 +1,6 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,7 +27,7 @@ public class DeleteHabitCommandHandler : IRequestHandler<DeleteHabitCommand, Uni
             .FirstOrDefaultAsync(cancellationToken);
 
         if (habit is null)
-            throw new Exception("Habit not found");
+            throw new NotFoundException(nameof(Habit), request.Id);
 
         _context.Habits.Remove(habit);
         await _context.SaveChangesAsync(cancellationToken);
