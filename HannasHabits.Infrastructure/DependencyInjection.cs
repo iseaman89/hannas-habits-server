@@ -25,8 +25,6 @@ public static class DependencyInjection
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
-        services.AddSingleton<IPasswordHasher, PasswordHasher>();
-        
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IApplicationDbContext>(provider =>
