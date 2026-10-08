@@ -18,7 +18,7 @@ This is a **learning project**. Clean Code, DDD and Clean Architecture are used 
 | Part | Path | Remote |
 |---|---|---|
 | Backend (.NET 8) — this repo | `/Users/iseaman/RiderProjects/HannasHabits` | `iseaman89/hannas-habits-server` |
-| Frontend (React 18 + Vite 6 + Tailwind 4; plain JS today, **migrating to TypeScript**) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
+| Frontend (React 18 + Vite 6 + Tailwind 4; **TypeScript** (strict) since F1 — the old UI is still JS and is replaced by TS step by step) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
 
 The frontend is a separate git repo outside this working directory. Add it with `--add-dir` / `/add-dir` when working on it; where `/add-dir` is unavailable, work on it with absolute paths via Bash/Read/Edit (done for F0). It has its own short `CLAUDE.md` that points back here.
 
@@ -48,7 +48,7 @@ Background work: `RefreshTokenCleanupService` (Infrastructure/Identity, a `Backg
 
 ## Work plan
 
-The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b, mockup M1, frontend F0–F9). One step per session: do the next open step, check it off, log it in `docs/PROGRESS.md`, then the user starts a fresh session. Decisions so far: repositories per aggregate root, MediatR 14 stays (free Community license key — MediatR is by Jimmy Bogard/Lucky Penny Software), TypeScript for the frontend, new design from the mockup — **`docs/DESIGN.md`** (tokens, screens, what the UI needs from the API; read it instead of re-importing the mockup; streaks make B8 required, `Priority` is dropped).
+The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B11 incl. B5b, mockup M1, frontend F0–F9). One step per session: do the next open step, check it off, log it in `docs/PROGRESS.md`, then the user starts a fresh session. Decisions so far: repositories per aggregate root, MediatR 14 stays (free Community license key — MediatR is by Jimmy Bogard/Lucky Penny Software), TypeScript for the frontend, new design from the mockup — **`docs/DESIGN.md`** (tokens, screens, what the UI needs from the API; read it instead of re-importing the mockup; streaks make B8 required, `Priority` is dropped).
 
 ## Git workflow
 
@@ -73,7 +73,7 @@ dotnet test HannasHabits.sln                      # ~35 s; needs Docker (an old 
 docker compose up --build                         # API on :8080 + PostgreSQL; needs a .env (copy .env.example)
 dotnet ef migrations add <Name> -p HannasHabits.Infrastructure -s HannasHabits.WebApi
 dotnet ef database update -p HannasHabits.Infrastructure -s HannasHabits.WebApi
-# frontend (in its own repo): npm run dev | npm run build | npm run lint
+# frontend (in its own repo): npm run dev | build | typecheck | lint | test | format:check | api:types -- <openapi.json or URL>
 ```
 
 ## Session & context hygiene (keep token usage low)
