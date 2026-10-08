@@ -18,7 +18,7 @@ This is a **learning project**. Clean Code, DDD and Clean Architecture are used 
 | Part | Path | Remote |
 |---|---|---|
 | Backend (.NET 8) — this repo | `/Users/iseaman/RiderProjects/HannasHabits` | `iseaman89/hannas-habits-server` |
-| Frontend (React 18 + Vite 6 + Tailwind 4; **TypeScript** (strict) since F1 — the old UI is still JS and is replaced by TS step by step) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
+| Frontend (React 18 + Vite 6 + Tailwind 4; **TypeScript** (strict) since F1, design system in `src/shared/ui` since F2 — the old screens are still JS and are replaced by TS step by step) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
 
 The frontend is a separate git repo outside this working directory. Add it with `--add-dir` / `/add-dir` when working on it; where `/add-dir` is unavailable, work on it with absolute paths via Bash/Read/Edit (done for F0). It has its own short `CLAUDE.md` that points back here.
 

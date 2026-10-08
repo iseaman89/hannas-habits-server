@@ -54,6 +54,8 @@ Mood scale (calendar days + mood picker) and habit "missed":
 | `--hh-m4` / `--hh-f4` | Rough | `#d67f48` / `bg` | `#ffc6a5` / `#1d1a17` |
 | `--hh-miss` | habit cell "missed" | `#ffe1d0` | `#8c491a` |
 
+**Implemented in F2** (`src/shared/ui/theme.css` in the frontend; use these, not the mockup's names): roles `bg`, `surface`, `text`, `accent`, `accent-2`, `divider` (+ `accent-hover`, `accent-pressed`, `backdrop`); ramps `neutral-*`, `accent-*`, `accent-2-*` (dark = mirrored, automatically); mood fills `mood-great|good|okay|low|rough` with their text colour `on-mood-*` (= mockup `--hh-m0..m4` / `--hh-f0..f4`, **index 0 = great = API value 5** — the names avoid that flip); `miss` (= `--hh-miss`). Utilities: `bg-mood-great text-on-mood-great`, `bg-miss`, `rounded-card`, `font-display`, `text-page|dialog|card|kicker`.
+
 ### 2.4 Type, space, radius, elevation
 
 - **Fonts** (Google Fonts): `Caprasimo` 400 for headings/buttons/numbers, `Figtree` 400/600/700 for body. Base 15 px / 1.55. Headings: line-height 1.12, letter-spacing −0.015em. Page title (`h1`) 44 px; login hero up to 88 px; card titles 17–19 px; dialog title 26 px.
@@ -167,6 +169,7 @@ Not designed in the prototype — needed anyway:
 - **Responsive/mobile**: the sidebar is a fixed 240 px and the habit grid has `min-width: 1060px` — a small-screen layout (bottom nav or drawer) is part of F9.
 - The habit grid always renders 31 day columns; render the real month length.
 - The dark theme is complete for roles and ramps, but check contrast of the mood colours on `surface` in dark.
+- **Contrast (measured in F2):** light theme `bg` text on `accent` (primary button, active nav pill) is **3.0 : 1** (3.8 on the hover colour), `bg` on sage-600 3.5 : 1 — below WCAG AA for normal-size text (4.5), fine only for large text. The design's colours were kept; if it matters, use `accent-700` (≈ 6 : 1) as the button fill or darken `accent` — a design decision for the user. Dark theme and `accent-700` text on `bg`/`surface` pass (5.1–14 : 1).
 
 Prototype shortcuts not to copy:
 - Interactive `div`/`span` with `onClick` everywhere → real `button`s / `role="radio"` / `role="checkbox"` / `<input type="range">` with labels and keyboard support (the old UI had clickable `<img>`s — F9 lists this too).
