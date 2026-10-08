@@ -42,7 +42,9 @@ Tests (xunit, **no mocking library**: hand-written in-memory fakes, xunit's own 
 
 Decision: persistence goes through **repositories** (one per aggregate root; interfaces in Application, implementations in Infrastructure) instead of handlers using a DbContext directly (done in B3; the read side uses small query interfaces that project to DTOs). Application has no EF Core reference.
 
-Not part of the solution (legacy, kept only as reference for porting features, to be deleted once ported): `HannaHabitsService/`, `UserService/`, `UserService.Tests/`, `HannasHabits.Data.Shared/`.
+Delivery (B10): `HannasHabits.WebApi/Dockerfile` (multi-stage, .NET 8, non-root; build context = repo root), `docker-compose.yml` (API + PostgreSQL; values from a git-ignored `.env`, template in `.env.example`; sets `Database__MigrateOnStartup=true`), `.github/workflows/ci.yml` (build + `dotnet test HannasHabits.sln` on ubuntu-latest, plus a Docker image build). The legacy services (`HannaHabitsService`, `UserService`, `Data.Shared`) were deleted after everything was ported; they are still in the git history.
+
+Background work: `RefreshTokenCleanupService` (Infrastructure/Identity, a `BackgroundService`) deletes refresh-token rows `RetentionDays` (7) after they expired, at startup and every `IntervalHours` (6) — the rule lives in `RefreshTokenCleaner`. `Database:MigrateOnStartup=true` applies pending migrations at startup (off by default; only for a single instance — EF Core 8 takes no migration lock).
 
 ## Work plan
 
@@ -58,7 +60,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b
 ## Configuration & secrets
 
 - Secrets live in `dotnet user-secrets` of `HannasHabits.WebApi` (only loaded when `ASPNETCORE_ENVIRONMENT=Development`; production uses env vars): `ConnectionStrings:DbConnection` (PostgreSQL), `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `MediatR:LicenseKey` (free Community key, expires 2027-10-08), `Google:ClientId` (public OAuth client id of the frontend — not secret, but kept here per environment; production env var `Google__ClientId`; the app refuses to start without it). `appsettings.json` holds only non-secret defaults. Never commit secrets, passwords or `client_secret*.json` files.
-- Non-secret config: `Cors:AllowedOrigins` (array; Development: `http://localhost:5173` in `appsettings.Development.json`; production via env vars `Cors__AllowedOrigins__0`, …; empty = no cross-origin access). The `Jwt:` section is bound to `JwtOptions` and validated on startup (`Jwt:Key` ≥ 32 chars; optional `Jwt:AccessMinutes` default 15, `Jwt:RefreshDays` default 30).
+- Non-secret config: `Database:MigrateOnStartup` (default off), `RefreshTokenCleanup:IntervalHours` / `:RetentionDays` (defaults 6 / 7, validated on startup), `Cors:AllowedOrigins` (array; Development: `http://localhost:5173` in `appsettings.Development.json`; production via env vars `Cors__AllowedOrigins__0`, …; empty = no cross-origin access). The `Jwt:` section is bound to `JwtOptions` and validated on startup (`Jwt:Key` ≥ 32 chars; optional `Jwt:AccessMinutes` default 15, `Jwt:RefreshDays` default 30).
 - Show secrets only masked (`dotnet user-secrets list | sed -E 's/=.*/= <hidden>/'`).
 - Running `dotnet ef` against the real DB needs `ASPNETCORE_ENVIRONMENT=Development`.
 
@@ -68,6 +70,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b
 dotnet build HannasHabits.sln
 dotnet run --project HannasHabits.WebApi          # http://localhost:5016, https://localhost:7054, Swagger at /swagger
 dotnet test HannasHabits.sln                      # ~35 s; needs Docker (an old engine is handled, see TestEnvironment)
+docker compose up --build                         # API on :8080 + PostgreSQL; needs a .env (copy .env.example)
 dotnet ef migrations add <Name> -p HannasHabits.Infrastructure -s HannasHabits.WebApi
 dotnet ef database update -p HannasHabits.Infrastructure -s HannasHabits.WebApi
 # frontend (in its own repo): npm run dev | npm run build | npm run lint
