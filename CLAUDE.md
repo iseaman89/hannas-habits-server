@@ -20,7 +20,7 @@ This is a **learning project**. Clean Code, DDD and Clean Architecture are used 
 | Backend (.NET 8) — this repo | `/Users/iseaman/RiderProjects/HannasHabits` | `iseaman89/hannas-habits-server` |
 | Frontend (React 18 + Vite 6 + Tailwind 4; plain JS today, **migrating to TypeScript**) | `/Users/iseaman/WebstormProjects/hannas-habits-ui` | `iseaman89/hannas-habits-ui` |
 
-The frontend is a separate git repo outside this working directory. Add it with `--add-dir` / `/add-dir` when working on it.
+The frontend is a separate git repo outside this working directory. Add it with `--add-dir` / `/add-dir` when working on it; where `/add-dir` is unavailable, work on it with absolute paths via Bash/Read/Edit (done for F0). It has its own short `CLAUDE.md` that points back here.
 
 ## Backend architecture
 
@@ -55,7 +55,7 @@ The step-by-step plan lives in **`docs/ROADMAP.md`** (backend B0–B10 incl. B5b
 - Work **only on branch `dev`** (create it if missing). Never commit to `main`.
 - The user allows **local commits** once a roadmap step is finished and verified (build/lint/tests green). Small, focused commits with a clear message; end commit messages with the `Co-Authored-By: Claude …` line the harness provides. Stage explicit paths, never other people's/WIP changes, never secrets (scan the staged diff for keys/passwords before committing).
 - **Never push** (and no force operations, no history rewrites) unless the user explicitly asks.
-- Frontend repo: same rules; its `dev` branch exists (based on `origin/main`). It has uncommitted old WIP of the user — ask before touching/committing it (see ROADMAP F0).
+- Frontend repo: same rules; work on its `dev` branch (based on `origin/main`, F0 is committed there). The user's old uncommitted WIP is parked in `git stash` (`stash@{0}` on its `main`) — never drop or pop it without asking.
 
 ## Configuration & secrets
 
