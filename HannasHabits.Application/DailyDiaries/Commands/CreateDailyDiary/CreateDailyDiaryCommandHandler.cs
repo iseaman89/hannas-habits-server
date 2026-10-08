@@ -7,27 +7,26 @@ namespace HannasHabits.Application.DailyDiaries.Commands.CreateDailyDiary;
 
 public class CreateDailyDiaryCommandHandler : IRequestHandler<CreateDailyDiaryCommand, CreateDailyDiaryDto>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IDailyDiaryRepository _dailyDiaries;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
-    private readonly IUserContextService _userContextService;
+    private readonly ICurrentUser _currentUser;
 
-    public CreateDailyDiaryCommandHandler(IApplicationDbContext context, IMapper mapper, IUserContextService userContextService)
+    public CreateDailyDiaryCommandHandler(IDailyDiaryRepository dailyDiaries, IUnitOfWork unitOfWork, IMapper mapper, ICurrentUser currentUser)
     {
-        _context = context;
+        _dailyDiaries = dailyDiaries;
+        _unitOfWork = unitOfWork;
         _mapper = mapper;
-        _userContextService = userContextService;
+        _currentUser = currentUser;
     }
-    
+
     public async Task<CreateDailyDiaryDto> Handle(CreateDailyDiaryCommand request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var dailyDiary = DailyDiary.Create(userId.Value, request.Date, request.Text);
-        
-        _context.DailyDiaries.Add(dailyDiary);
-        await _context.SaveChangesAsync(cancellationToken);
-        
+        var dailyDiary = DailyDiary.Create(_currentUser.UserId, request.Date, request.Text);
+
+        _dailyDiaries.Add(dailyDiary);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return _mapper.Map<CreateDailyDiaryDto>(dailyDiary);
     }
 }

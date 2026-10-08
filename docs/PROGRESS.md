@@ -96,3 +96,19 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 4. `AuthController` still answers `400 "Invalid credentials"` as plain string for a failed login (should be 401 ProblemDetails) — B5 moves it into commands anyway.
 
 **Next:** B3 — Repositories, Unit of Work, current user.
+
+## 2026-10-08 — B3 done (repositories, unit of work, current user)
+
+**Done:**
+- **Application abstractions:** `ICurrentUser` (non-null `UserId`, throws `UnauthorizedAccessException` once → the `userId is null` check is gone from all 12 handlers), `IUnitOfWork`, command side `IHabitRepository` / `IDailyDiaryRepository` (tracked aggregates; every lookup takes the owner's id → data isolation is visible in the signature and still enforced in the query), read side `IHabitQueries` / `IDailyDiaryQueries` (project straight to DTOs). Interfaces live next to their feature (`Habits/`, `DailyDiaries/`), the generic ones in `Common/Interfaces`.
+- **Infrastructure:** `Repositories/` (`HabitRepository`, `DailyDiaryRepository`), `Queries/` (`HabitQueries`, `DailyDiaryQueries`: `AsNoTracking` + `Select` into the DTO records), `Services/CurrentUser`. `ApplicationDbContext` implements `IUnitOfWork` (the DbContext already *is* a unit of work; the interface only keeps EF out of Application). `GetRecordsAsync` is one round trip and returns `null` when the habit is unknown/foreign (→ 404) vs. an empty list for a habit without records in range.
+- **All 12 handlers** use repositories/queries + `IUnitOfWork`; no handler touches a DbContext or `Microsoft.EntityFrameworkCore` any more. Mapster only remains on the command side (`CreateHabitDto`, `CreateDailyDiaryDto`, `HabitRecordDto`); the now unused read-side mappings were removed.
+- **Domain:** minimal `Habit.UnmarkCompleted(date)` (returns `bool`). Reason: with one repository per aggregate root there is no `HabitRecords` DbSet to remove a record from, so the aggregate must do it (EF deletes the orphaned required child). B4 refines it.
+- **Packages:** `System.IdentityModel.Tokens.Jwt` moved from Application to Infrastructure (only `JwtTokenService` uses it); `FluentValidation.AspNetCore` dropped. That exposed two hidden transitive dependencies, now declared explicitly: `Microsoft.Extensions.Configuration.Abstractions` in Application and `<FrameworkReference Include="Microsoft.AspNetCore.App" />` in Infrastructure (it uses `IHttpContextAccessor`).
+- Hardening on the way: a malformed user-id claim is now a 401 instead of a `FormatException` (500).
+
+**Verified:** build 0 warnings/0 errors; `has-pending-model-changes` = none (no migration needed); end-to-end smoke test over HTTPS (43 checks, all PASS): habit CRUD, mark/unmark/re-mark days incl. idempotency and the DB row really deleted, records `from`/`to`/empty range/`from>to`, diary CRUD, 404 for every cross-user operation, delete cascade. Throw-away users deleted afterwards, DB back to 1 user / 0 habits / 2 diaries.
+
+**Finished after the user's OK to delete:** removed the dead `IApplicationDbContext.cs`, `IUserContextService.cs` (Application) and `UserContextService.cs` (Infrastructure), then `Microsoft.EntityFrameworkCore` from `HannasHabits.Application.csproj`. Rebuilt (0 warnings), `dotnet list package --include-transitive` shows no EF Core in Application, smoke test re-run (all PASS), throw-away users deleted again.
+
+**Next:** B4 — Domain hardening.

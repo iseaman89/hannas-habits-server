@@ -2,35 +2,31 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.DailyDiaries.Commands.DeleteDailyDiary;
 
 public class DeleteDailyDiaryCommandHandler : IRequestHandler<DeleteDailyDiaryCommand, Unit>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
+    private readonly IDailyDiaryRepository _dailyDiaries;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
 
-    public DeleteDailyDiaryCommandHandler(IApplicationDbContext context, IUserContextService userContextService)
+    public DeleteDailyDiaryCommandHandler(IDailyDiaryRepository dailyDiaries, IUnitOfWork unitOfWork, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
+        _dailyDiaries = dailyDiaries;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
     }
-    
+
     public async Task<Unit> Handle(DeleteDailyDiaryCommand request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var dailyDiary = await _context.DailyDiaries
-            .Where(d => d.Id == request.Id && d.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
-        
+        var dailyDiary = await _dailyDiaries.GetByIdAsync(_currentUser.UserId, request.Id, cancellationToken);
+
         if (dailyDiary is null) throw new NotFoundException(nameof(DailyDiary), request.Id);
-        
-        _context.DailyDiaries.Remove(dailyDiary);
-        await _context.SaveChangesAsync(cancellationToken);
-        
+
+        _dailyDiaries.Remove(dailyDiary);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return Unit.Value;
     }
 }

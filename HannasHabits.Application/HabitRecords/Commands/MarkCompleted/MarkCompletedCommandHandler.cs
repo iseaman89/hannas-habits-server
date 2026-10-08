@@ -1,34 +1,30 @@
 using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Application.Habits;
 using HannasHabits.Domain.Entities;
 using MapsterMapper;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.HabitRecords.Commands.MarkCompleted;
 
 public class MarkCompletedCommandHandler : IRequestHandler<MarkCompletedCommand, HabitRecordDto>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
+    private readonly IHabitRepository _habits;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
     private readonly IMapper _mapper;
 
-    public MarkCompletedCommandHandler(IApplicationDbContext context, IUserContextService userContextService, IMapper mapper)
+    public MarkCompletedCommandHandler(IHabitRepository habits, IUnitOfWork unitOfWork, ICurrentUser currentUser, IMapper mapper)
     {
-        _context = context;
-        _userContextService = userContextService;
+        _habits = habits;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
         _mapper = mapper;
     }
 
     public async Task<HabitRecordDto> Handle(MarkCompletedCommand request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var habit = await _context.Habits
-            .Include(h => h.Records)
-            .Where(h => h.Id == request.HabitId && h.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
+        var habit = await _habits.GetByIdWithRecordsAsync(_currentUser.UserId, request.HabitId, cancellationToken);
 
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.HabitId);
@@ -37,7 +33,7 @@ public class MarkCompletedCommandHandler : IRequestHandler<MarkCompletedCommand,
         var record = habit.Records.FirstOrDefault(r => r.Date == request.Date)
                      ?? habit.MarkCompleted(request.Date);
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<HabitRecordDto>(record);
     }

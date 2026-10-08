@@ -2,36 +2,32 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.Habits.Commands.UpdateHabit;
 
 public class UpdateHabitCommandHandler : IRequestHandler<UpdateHabitCommand, Unit>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
+    private readonly IHabitRepository _habits;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
 
-    public UpdateHabitCommandHandler(IApplicationDbContext context, IUserContextService userContextService)
+    public UpdateHabitCommandHandler(IHabitRepository habits, IUnitOfWork unitOfWork, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
+        _habits = habits;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
     }
 
     public async Task<Unit> Handle(UpdateHabitCommand request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var habit = await _context.Habits
-            .Where(h => h.Id == request.Id && h.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
+        var habit = await _habits.GetByIdAsync(_currentUser.UserId, request.Id, cancellationToken);
 
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.Id);
 
         habit.Update(request.Title, request.Description);
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Unit.Value;
     }

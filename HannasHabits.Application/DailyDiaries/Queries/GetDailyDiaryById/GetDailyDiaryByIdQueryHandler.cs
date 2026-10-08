@@ -1,36 +1,25 @@
 using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
-using MapsterMapper;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.DailyDiaries.Queries.GetDailyDiaryById;
 
 public class GetDailyDiaryByIdQueryHandler : IRequestHandler<GetDailyDiaryByIdQuery, DailyDiaryDetailsDto>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
-    private readonly IMapper _mapper;
+    private readonly IDailyDiaryQueries _dailyDiaryQueries;
+    private readonly ICurrentUser _currentUser;
 
-    public GetDailyDiaryByIdQueryHandler(IApplicationDbContext context, IUserContextService userContextService, IMapper mapper)
+    public GetDailyDiaryByIdQueryHandler(IDailyDiaryQueries dailyDiaryQueries, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
-        _mapper = mapper;
+        _dailyDiaryQueries = dailyDiaryQueries;
+        _currentUser = currentUser;
     }
-    
+
     public async Task<DailyDiaryDetailsDto> Handle(GetDailyDiaryByIdQuery request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var dailyDiary = await _context.DailyDiaries
-            .Where(d => d.Id == request.Id && d.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
-        
-        if (dailyDiary is null) throw new NotFoundException(nameof(DailyDiary), request.Id);
-        
-        return _mapper.Map<DailyDiaryDetailsDto>(dailyDiary);
+        var dailyDiary = await _dailyDiaryQueries.GetByIdAsync(_currentUser.UserId, request.Id, cancellationToken);
+
+        return dailyDiary ?? throw new NotFoundException(nameof(DailyDiary), request.Id);
     }
 }

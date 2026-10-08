@@ -1,36 +1,25 @@
 using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
-using MapsterMapper;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.Habits.Queries.GetHabitById;
 
 public class GetHabitByIdQueryHandler : IRequestHandler<GetHabitByIdQuery, HabitDetailsDto>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
-    private readonly IMapper _mapper;
+    private readonly IHabitQueries _habitQueries;
+    private readonly ICurrentUser _currentUser;
 
-    public GetHabitByIdQueryHandler(IApplicationDbContext context, IUserContextService userContextService, IMapper mapper)
+    public GetHabitByIdQueryHandler(IHabitQueries habitQueries, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
-        _mapper = mapper;
+        _habitQueries = habitQueries;
+        _currentUser = currentUser;
     }
-    
+
     public async Task<HabitDetailsDto> Handle(GetHabitByIdQuery request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var habit = await _context.Habits
-            .Where(h => h.Id == request.Id && h.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
-        
-        if (habit is null) throw new NotFoundException(nameof(Habit), request.Id);
-        
-        return _mapper.Map<HabitDetailsDto>(habit);
+        var habit = await _habitQueries.GetByIdAsync(_currentUser.UserId, request.Id, cancellationToken);
+
+        return habit ?? throw new NotFoundException(nameof(Habit), request.Id);
     }
 }

@@ -44,7 +44,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   - Replace the weatherforecast template in `HannasHabits.WebApi.http` with real requests (register → login → habits → records).
   *Done when:* every endpoint is callable from Swagger / the `.http` file; no `[HttpGet("id")]`, no body on GET/DELETE.
 
-- [ ] **B3 — Repositories, Unit of Work, current user.**
+- [x] **B3 — Repositories, Unit of Work, current user.** *(done 2026-10-08, details in PROGRESS; build 0 warnings, 43-check HTTP smoke test incl. cross-user isolation all PASS, Application has no EF Core reference, not even transitive).*
   - `IHabitRepository`, `IDailyDiaryRepository` (Application) + implementations in `Infrastructure/Repositories`; `IUnitOfWork`.
   - `ICurrentUser` with non-null `UserId` (throws once) — removes the repeated `userId is null` check in every handler.
   - Refactor handlers to repositories; read side gets small query interfaces (e.g. `IHabitQueries`) that project straight to DTOs (`AsNoTracking`, `Select`) → Application no longer references EF Core (also drop unused `System.IdentityModel.Tokens.Jwt`, deprecated `FluentValidation.AspNetCore`).
@@ -52,7 +52,7 @@ Both GitHub repos are **public** (checked 2026-10-08).
   *Done when:* `HannasHabits.Application.csproj` has no EF Core reference; handlers never touch a DbContext.
 
 - [ ] **B4 — Domain hardening.**
-  - Move invariants into the aggregate: `Habit.MarkCompleted` rejects duplicates, `Habit.UnmarkCompleted(date)`; `DailyDiary` unique per user+date → Conflict instead of DB exception. (Since B2 `MarkCompleted` is idempotent in the handler; two *concurrent* PUTs for the same day still hit the unique index → 500. Handle the race, e.g. catch the unique violation and return the existing record.)
+  - Move invariants into the aggregate: `Habit.MarkCompleted` rejects duplicates, `Habit.UnmarkCompleted(date)` (B3 already added a minimal version returning `bool`, because without a `HabitRecords` DbSet the handler needs a way to remove a record through the aggregate; B4 refines it); `DailyDiary` unique per user+date → Conflict instead of DB exception. (Since B2 `MarkCompleted` is idempotent in the handler; two *concurrent* PUTs for the same day still hit the unique index → 500. Handle the race, e.g. catch the unique violation and return the existing record.)
   - Value objects (fill the empty `ValueObjects` folder): `HabitTitle`, `HabitSchedule` (set of `DayOfWeek`), later `Mood`/`Percentage`.
   - Port **habit schedules** (days of week) from the old model; validator for `Description` (max 500).
   - Consistent English domain messages; EF configuration + migration.

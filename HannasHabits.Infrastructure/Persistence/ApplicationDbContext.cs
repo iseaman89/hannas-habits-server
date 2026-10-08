@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Infrastructure.Persistence;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IApplicationDbContext
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IUnitOfWork
 {
     public DbSet<Habit> Habits => Set<Habit>();
     public DbSet<HabitRecord> HabitRecords => Set<HabitRecord>();

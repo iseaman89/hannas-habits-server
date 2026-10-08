@@ -57,4 +57,11 @@ public class Habit : EntityBase
         _records.Add(record);
         return record;
     }
+
+    /// <summary>Takes back the completion of a day; <c>false</c> if the day was not marked. Needs the records loaded.</summary>
+    public bool UnmarkCompleted(DateOnly date)
+    {
+        var record = _records.FirstOrDefault(r => r.Date == date);
+        return record is not null && _records.Remove(record);
+    }
 }

@@ -1,6 +1,10 @@
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Application.DailyDiaries;
+using HannasHabits.Application.Habits;
 using HannasHabits.Infrastructure.Identity;
 using HannasHabits.Infrastructure.Persistence;
+using HannasHabits.Infrastructure.Queries;
+using HannasHabits.Infrastructure.Repositories;
 using HannasHabits.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -31,10 +35,15 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IUserContextService, UserContextService>();
-        services.AddScoped<IApplicationDbContext>(provider =>
-            provider.GetRequiredService<ApplicationDbContext>());
-        
+        services.AddScoped<ICurrentUser, CurrentUser>();
+
+        // The DbContext is the unit of work: one instance per request, shared by repositories and queries.
+        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IHabitRepository, HabitRepository>();
+        services.AddScoped<IDailyDiaryRepository, DailyDiaryRepository>();
+        services.AddScoped<IHabitQueries, HabitQueries>();
+        services.AddScoped<IDailyDiaryQueries, DailyDiaryQueries>();
+
         services.AddHttpContextAccessor();
 
         return services;
