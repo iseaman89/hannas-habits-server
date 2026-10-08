@@ -171,6 +171,8 @@ Not designed in the prototype — needed anyway:
 - The dark theme is complete for roles and ramps, but check contrast of the mood colours on `surface` in dark.
 - **Contrast (measured in F2):** light theme `bg` text on `accent` (primary button, active nav pill) is **3.0 : 1** (3.8 on the hover colour), `bg` on sage-600 3.5 : 1 — below WCAG AA for normal-size text (4.5), fine only for large text. The design's colours were kept; if it matters, use `accent-700` (≈ 6 : 1) as the button fill or darken `accent` — a design decision for the user. Dark theme and `accent-700` text on `bg`/`surface` pass (5.1–14 : 1).
 
+- **Contrast of the habit cells (measured in F5, against the card `surface`):** light theme — *missed* 1.08 : 1 (practically invisible), *upcoming* ring 1.5 : 1, *done* fill 2.1 : 1, *due-today* ring 2.7 : 1, check icon on *done* 2.4 : 1; all below the 3 : 1 that WCAG 1.4.11 asks of graphics. Dark theme is fine except *missed* (2.2 : 1) — upcoming ring 3.5, done 5.4, due-today 5.1, check icon 6.1. The states are also told apart by shape (filled / ring / dot) and every cell has a text label, so nothing depends on colour alone *except missed vs. open-past*, which differ only by that pale fill. Design colours kept; if it matters, darken `--hh-miss` in the light theme (e.g. `accent-300`/`400`) and use a darker `done` — a design decision for the user.
+
 Prototype shortcuts not to copy:
 - Interactive `div`/`span` with `onClick` everywhere → real `button`s / `role="radio"` / `role="checkbox"` / `<input type="range">` with labels and keyboard support (the old UI had clickable `<img>`s — F9 lists this too).
 - Inline styles and hard-coded demo data, `localStorage` only for the theme, "carry" streak offset (demo seed), fake login that accepts anything.
