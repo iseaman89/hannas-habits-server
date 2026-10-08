@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore HannasHabits.sln
+
+      # Warnings are not errors here on purpose: a new NuGet advisory would otherwise break an unrelated change.
+      - run: dotnet build HannasHabits.sln --no-restore -c Release
+
+      # The integration tests start PostgreSQL in a Testcontainers container; ubuntu-latest has Docker.
+      - run: dotnet test HannasHabits.sln --no-build -c Release
+
+  docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds the image the same way docker-compose does (nothing is pushed anywhere).
+      - run: docker build -f HannasHabits.WebApi/Dockerfile -t hannas-habits-api:ci .

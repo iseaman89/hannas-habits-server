@@ -401,3 +401,6 @@ FodyWeavers.xsd
 .idea/
 .DS_Store
 *.DotSettings.user
+
+# Local docker-compose settings with real secrets (copy .env.example to .env)
+.env

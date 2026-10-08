@@ -13,11 +13,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
-        // MediatR (free Community license key; without it MediatR only logs a warning)
+        // MediatR (free Community license key; without it MediatR only logs a warning).
+        // An empty value counts as "no key": docker-compose passes an unset variable on as "", and MediatR would
+        // log that as a license error.
+        var licenseKey = configuration["MediatR:LicenseKey"];
         services.AddMediatR(cnf =>
         {
             cnf.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
-            cnf.LicenseKey = configuration["MediatR:LicenseKey"];
+            cnf.LicenseKey = string.IsNullOrWhiteSpace(licenseKey) ? null : licenseKey;
         });
 
         // FluentValidation
