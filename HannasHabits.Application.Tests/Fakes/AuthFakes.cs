@@ -9,7 +9,7 @@ namespace HannasHabits.Application.Tests.Fakes;
 internal sealed class FakeIdentityService : IIdentityService
 {
     public static IdentityUserDto DefaultUser { get; } =
-        new(Guid.Parse("11111111-1111-1111-1111-111111111111"), "ada@example.com", "ada@example.com", "Ada");
+        new(Guid.Parse("11111111-1111-1111-1111-111111111111"), "ada@example.com", "ada@example.com", "Ada", "Lovelace");
 
     public FakeIdentityService(List<string>? calls = null)
     {
@@ -22,15 +22,17 @@ internal sealed class FakeIdentityService : IIdentityService
 
     public string? RegisteredEmail { get; private set; }
     public string? RegisteredPassword { get; private set; }
-    public string? RegisteredDisplayName { get; private set; }
+    public string? RegisteredFirstName { get; private set; }
+    public string? RegisteredLastName { get; private set; }
     public ExternalIdentity? SignedInExternal { get; private set; }
 
-    public Task<IdentityUserDto> RegisterAsync(string email, string password, string? displayName, CancellationToken cancellationToken = default)
+    public Task<IdentityUserDto> RegisterAsync(string email, string password, string? firstName, string? lastName, CancellationToken cancellationToken = default)
     {
         Calls.Add("identity.register");
         RegisteredEmail = email;
         RegisteredPassword = password;
-        RegisteredDisplayName = displayName;
+        RegisteredFirstName = firstName;
+        RegisteredLastName = lastName;
         return Result();
     }
 

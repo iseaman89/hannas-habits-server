@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using HannasHabits.Integration.Tests.Support;
 using Microsoft.IdentityModel.Tokens;
 
@@ -34,7 +35,7 @@ public class AuthApiTests
     {
         var email = TestUser.NewEmail();
 
-        var response = await Register(new { email, password = TestUser.Password, displayName = "  Ada Lovelace " });
+        var response = await Register(new { email, password = TestUser.Password, firstName = "  Ada ", lastName = " Lovelace " });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.ReadJsonAsync();
@@ -43,7 +44,8 @@ public class AuthApiTests
         Assert.NotEqual(Guid.Empty, user.GetProperty("id").GetGuid());
         Assert.Equal(email, user.GetProperty("userName").GetString());
         Assert.Equal(email, user.GetProperty("email").GetString());
-        Assert.Equal("Ada Lovelace", user.GetProperty("displayName").GetString());
+        Assert.Equal("Ada", user.GetProperty("firstName").GetString());
+        Assert.Equal("Lovelace", user.GetProperty("lastName").GetString());
 
         var tokens = body.GetProperty("tokens");
         Assert.Equal(3, tokens.GetProperty("accessToken").GetString()!.Split('.').Length); // a JWT
@@ -56,35 +58,40 @@ public class AuthApiTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task Register_WithoutAName_TheDisplayNameIsTheLocalPartOfTheEmail(string? displayName)
+    public async Task Register_WithoutAName_TheFirstNameIsTheLocalPartOfTheEmail(string? firstName)
     {
         var local = $"grace-{Guid.NewGuid():N}";
 
-        var response = await Register(new { email = local + "@example.com", password = TestUser.Password, displayName });
+        var response = await Register(new { email = local + "@example.com", password = TestUser.Password, firstName });
 
-        Assert.Equal(local, (await response.ReadJsonAsync()).GetProperty("user").GetProperty("displayName").GetString());
+        var user = (await response.ReadJsonAsync()).GetProperty("user");
+        Assert.Equal(local, user.GetProperty("firstName").GetString());
+        Assert.Equal(JsonValueKind.Null, user.GetProperty("lastName").ValueKind); // none given: null, not an empty string
     }
 
     [Fact]
-    public async Task Register_TheDisplayNameMayHave100Characters_NotMore_AndARejectedNameCreatesNoAccount()
+    public async Task Register_EachNameMayHave100Characters_NotMore_AndARejectedNameCreatesNoAccount()
     {
-        var ok = await Register(new { email = TestUser.NewEmail(), password = TestUser.Password, displayName = new string('n', 100) });
+        var ok = await Register(new { email = TestUser.NewEmail(), password = TestUser.Password, firstName = new string('n', 100), lastName = new string('l', 100) });
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
 
         var email = TestUser.NewEmail();
-        var tooLong = await Register(new { email, password = TestUser.Password, displayName = new string('n', 101) });
+        var firstTooLong = await Register(new { email, password = TestUser.Password, firstName = new string('n', 101) });
+        var lastTooLong = await Register(new { email, password = TestUser.Password, firstName = "Ada", lastName = new string('l', 101) });
 
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        Assert.Contains("displayName", await tooLong.ErrorKeysAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, firstTooLong.StatusCode);
+        Assert.Contains("firstName", await firstTooLong.ErrorKeysAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, lastTooLong.StatusCode);
+        Assert.Contains("lastName", await lastTooLong.ErrorKeysAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await Login(email, TestUser.Password)).StatusCode);
     }
 
     [Fact]
     public async Task Register_NamesWithUmlautsAndEmojiSurvive()
     {
-        var response = await Register(new { email = TestUser.NewEmail(), password = TestUser.Password, displayName = "Jörg 🎉 Müller" });
+        var response = await Register(new { email = TestUser.NewEmail(), password = TestUser.Password, firstName = "Jörg 🎉 Müller" });
 
-        Assert.Equal("Jörg 🎉 Müller", (await response.ReadJsonAsync()).GetProperty("user").GetProperty("displayName").GetString());
+        Assert.Equal("Jörg 🎉 Müller", (await response.ReadJsonAsync()).GetProperty("user").GetProperty("firstName").GetString());
     }
 
     [Fact]
@@ -176,7 +183,7 @@ public class AuthApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.ReadJsonAsync();
         Assert.Equal(user.Id, body.GetProperty("user").GetProperty("id").GetGuid());
-        Assert.Equal("Ada", body.GetProperty("user").GetProperty("displayName").GetString());
+        Assert.Equal("Ada", body.GetProperty("user").GetProperty("firstName").GetString());
         Assert.NotEqual(user.RefreshToken, body.GetProperty("tokens").GetProperty("refreshToken").GetString()); // a new session
     }
 
@@ -248,7 +255,7 @@ public class AuthApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.ReadJsonAsync();
         Assert.Equal(user.Id, body.GetProperty("user").GetProperty("id").GetGuid());
-        Assert.Equal("Ada", body.GetProperty("user").GetProperty("displayName").GetString());
+        Assert.Equal("Ada", body.GetProperty("user").GetProperty("firstName").GetString());
 
         var tokens = body.GetProperty("tokens");
         Assert.NotEqual(user.RefreshToken, tokens.GetProperty("refreshToken").GetString());
@@ -443,7 +450,7 @@ public class AuthApiTests
     {
         var subject = Guid.NewGuid().ToString("N");
         var email = TestUser.NewEmail();
-        var token = FakeGoogleTokenVerifier.TokenFor(subject, email, "Ada Lovelace");
+        var token = FakeGoogleTokenVerifier.TokenFor(subject, email, "Ada", "Lovelace");
 
         var first = await Google(token);
         var second = await Google(token);
@@ -452,7 +459,8 @@ public class AuthApiTests
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var user = (await first.ReadJsonAsync()).GetProperty("user");
         Assert.Equal(email, user.GetProperty("email").GetString());
-        Assert.Equal("Ada Lovelace", user.GetProperty("displayName").GetString());
+        Assert.Equal("Ada", user.GetProperty("firstName").GetString());
+        Assert.Equal("Lovelace", user.GetProperty("lastName").GetString());
         Assert.Equal(user.GetProperty("id").GetGuid(), (await second.ReadJsonAsync()).GetProperty("user").GetProperty("id").GetGuid());
     }
 

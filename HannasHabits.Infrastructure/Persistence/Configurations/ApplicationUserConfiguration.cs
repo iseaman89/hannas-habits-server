@@ -10,7 +10,10 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
 {
     public void Configure(EntityTypeBuilder<ApplicationUser> builder)
     {
-        builder.Property(u => u.DisplayName)
-            .HasMaxLength(AuthLimits.DisplayNameMaxLength);
+        builder.Property(u => u.FirstName)
+            .HasMaxLength(AuthLimits.NameMaxLength);
+
+        builder.Property(u => u.LastName)
+            .HasMaxLength(AuthLimits.NameMaxLength);
     }
 }

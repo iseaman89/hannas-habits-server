@@ -47,13 +47,13 @@ public class IdentityServiceTests : IAsyncLifetime
 
     private static string NewEmail() => $"identity-{Guid.NewGuid():N}@example.com";
 
-    private Task<IdentityUserDto> Register(string email, string password = Password, string? name = null)
-        => InScope(identity => identity.RegisterAsync(email, password, name));
+    private Task<IdentityUserDto> Register(string email, string password = Password, string? firstName = null, string? lastName = null)
+        => InScope(identity => identity.RegisterAsync(email, password, firstName, lastName));
 
     private Task<IdentityUserDto> Authenticate(string email, string password) => InScope(identity => identity.AuthenticateAsync(email, password));
 
-    private Task<IdentityUserDto> External(string subject, string email, string? name = null)
-        => InScope(identity => identity.SignInWithExternalAsync(new ExternalIdentity("Google", subject, email, name)));
+    private Task<IdentityUserDto> External(string subject, string email, string? firstName = null, string? lastName = null)
+        => InScope(identity => identity.SignInWithExternalAsync(new ExternalIdentity("Google", subject, email, firstName, lastName)));
 
     private static string NewSubject() => Guid.NewGuid().ToString("N");
 
@@ -64,12 +64,13 @@ public class IdentityServiceTests : IAsyncLifetime
     {
         var email = NewEmail();
 
-        var user = await Register(email, name: "  Ada Lovelace ");
+        var user = await Register(email, firstName: "  Ada ", lastName: " Lovelace  ");
 
         Assert.NotEqual(Guid.Empty, user.Id);
         Assert.Equal(email, user.UserName);
         Assert.Equal(email, user.Email);
-        Assert.Equal("Ada Lovelace", user.DisplayName);
+        Assert.Equal("Ada", user.FirstName);
+        Assert.Equal("Lovelace", user.LastName);
         var stored = await _db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
         Assert.NotNull(stored.PasswordHash);
         Assert.DoesNotContain(Password, stored.PasswordHash);
@@ -80,22 +81,43 @@ public class IdentityServiceTests : IAsyncLifetime
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task Register_WithoutAName_TheDisplayNameFallsBackToTheEmailsLocalPart(string? name)
+    public async Task Register_WithoutAName_TheFirstNameFallsBackToTheEmailsLocalPart(string? name)
     {
         var local = $"grace-{Guid.NewGuid():N}";
 
-        var user = await Register(local + "@example.com", name: name);
+        var user = await Register(local + "@example.com", firstName: name);
 
-        Assert.Equal(local, user.DisplayName);
-        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).DisplayName); // stored as "none", derived on the way out
+        Assert.Equal(local, user.FirstName);
+        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).FirstName); // stored as "none", derived on the way out
     }
 
     [Fact]
     public async Task Register_ATooLongName_IsCutNotRejected_TheValidatorIsWhatRefusesIt()
     {
-        var user = await Register(NewEmail(), name: new string('n', 150));
+        var user = await Register(NewEmail(), firstName: new string('n', 150), lastName: new string('l', 150));
 
-        Assert.Equal(100, user.DisplayName.Length);
+        Assert.Equal(100, user.FirstName.Length);
+        Assert.Equal(100, user.LastName!.Length);
+    }
+
+    [Fact]
+    public async Task Register_OnlyALastName_ShowsTheEmailsLocalPartAsTheFirstName_ButKeepsTheLastName()
+    {
+        var local = $"lovelace-{Guid.NewGuid():N}";
+
+        var user = await Register(local + "@example.com", lastName: "Lovelace");
+
+        Assert.Equal(local, user.FirstName);
+        Assert.Equal("Lovelace", user.LastName);
+        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).FirstName);
+    }
+
+    [Fact]
+    public async Task Register_WithoutALastName_TheLastNameIsNull()
+    {
+        var user = await Register(NewEmail(), firstName: "Ada", lastName: "  ");
+
+        Assert.Null(user.LastName);
     }
 
     [Fact]
@@ -158,12 +180,12 @@ public class IdentityServiceTests : IAsyncLifetime
     public async Task Authenticate_WithTheRightPassword_ReturnsTheAccount_EmailCaseDoesNotMatter()
     {
         var email = NewEmail();
-        var registered = await Register(email, name: "Ada");
+        var registered = await Register(email, firstName: "Ada");
 
         var user = await Authenticate(email.ToUpperInvariant(), Password);
 
         Assert.Equal(registered.Id, user.Id);
-        Assert.Equal("Ada", user.DisplayName);
+        Assert.Equal("Ada", user.FirstName);
     }
 
     [Fact]
@@ -216,10 +238,11 @@ public class IdentityServiceTests : IAsyncLifetime
         var subject = NewSubject();
         var email = NewEmail();
 
-        var user = await External(subject, email, "Ada Lovelace");
+        var user = await External(subject, email, "Ada", "Lovelace");
 
         Assert.Equal(email, user.Email);
-        Assert.Equal("Ada Lovelace", user.DisplayName);
+        Assert.Equal("Ada", user.FirstName);
+        Assert.Equal("Lovelace", user.LastName);
         var stored = await _db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
         Assert.True(stored.EmailConfirmed); // Google verified it
         Assert.Null(stored.PasswordHash);   // there is no password to guess
@@ -264,40 +287,43 @@ public class IdentityServiceTests : IAsyncLifetime
     [Theory]
     [InlineData(null)]
     [InlineData("  ")]
-    public async Task External_WithoutAName_TheDisplayNameFallsBackToTheLocalPart(string? name)
+    public async Task External_WithoutAName_TheFirstNameFallsBackToTheLocalPart(string? name)
     {
         var local = $"nameless-{Guid.NewGuid():N}";
 
         var user = await External(NewSubject(), local + "@example.com", name);
 
-        Assert.Equal(local, user.DisplayName);
+        Assert.Equal(local, user.FirstName);
     }
 
     [Fact]
     public async Task External_ALongProviderName_IsCutToTheLimit_NeverInTheMiddleOfAnEmoji()
     {
-        var cut = await External(NewSubject(), NewEmail(), new string('n', 150));
+        var cut = await External(NewSubject(), NewEmail(), new string('n', 150), new string('l', 150));
         var emojiOnTheBorder = await External(NewSubject(), NewEmail(), new string('a', 99) + "😀" + "tail");
         var emojiInsideTheLimit = await External(NewSubject(), NewEmail(), new string('a', 98) + "😀" + "tail");
 
-        Assert.Equal(100, cut.DisplayName.Length);
-        Assert.Equal(99, emojiOnTheBorder.DisplayName.Length);                    // the emoji would not fit whole: it is left out
-        Assert.False(char.IsHighSurrogate(emojiOnTheBorder.DisplayName[^1]));      // so no half of it (invalid text) remains
-        Assert.Equal(new string('a', 98) + "😀", emojiInsideTheLimit.DisplayName); // 100 characters, kept whole
+        Assert.Equal(100, cut.FirstName.Length);
+        Assert.Equal(100, cut.LastName!.Length);
+        Assert.Equal(99, emojiOnTheBorder.FirstName.Length);                    // the emoji would not fit whole: it is left out
+        Assert.False(char.IsHighSurrogate(emojiOnTheBorder.FirstName[^1]));      // so no half of it (invalid text) remains
+        Assert.Equal(new string('a', 98) + "😀", emojiInsideTheLimit.FirstName); // 100 characters, kept whole
     }
 
     [Fact]
     public async Task External_AnAccountWithoutAName_GetsTheProvidersName_ButAnExistingNameIsNeverOverwritten()
     {
         var subject = NewSubject();
-        var first = await External(subject, $"anon-{Guid.NewGuid():N}@example.com", name: null);
-        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id)).DisplayName);
+        var first = await External(subject, $"anon-{Guid.NewGuid():N}@example.com", firstName: null);
+        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id)).FirstName);
 
-        await External(subject, first.Email, "Ada Lovelace");
-        Assert.Equal("Ada Lovelace", (await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id)).DisplayName); // back-filled
+        await External(subject, first.Email, "Ada", "Lovelace");
+        var backFilled = await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id);
+        Assert.Equal(("Ada", "Lovelace"), (backFilled.FirstName, backFilled.LastName)); // back-filled
 
-        await External(subject, first.Email, "Somebody Else");
-        Assert.Equal("Ada Lovelace", (await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id)).DisplayName); // kept
+        await External(subject, first.Email, "Somebody", "Else");
+        var kept = await _db.Users.AsNoTracking().SingleAsync(u => u.Id == first.Id);
+        Assert.Equal(("Ada", "Lovelace"), (kept.FirstName, kept.LastName)); // kept
     }
 
     [Fact]
@@ -336,7 +362,7 @@ public class IdentityServiceTests : IAsyncLifetime
     public async Task External_WhenTheNameBackFillLosesARace_TheSignInStillSucceeds_AndTheContextStaysUsable()
     {
         var subject = NewSubject();
-        var nameless = await External(subject, NewEmail(), name: null); // an old account without a display name
+        var nameless = await External(subject, NewEmail(), firstName: null); // an old account without a display name
         var stale = new StaleConcurrencyStampInterceptor(_environment.SharedConnectionString);
         await using var provider = TestServices.Build(_environment.SharedConnectionString, clock: null, stale);
         await using var scope = provider.CreateAsyncScope();
@@ -351,7 +377,7 @@ public class IdentityServiceTests : IAsyncLifetime
         Assert.True(stale.Fired);                                             // and the race really took place
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await context.SaveChangesAsync();                                     // the token service saves this context next: it must not choke on the failed update
-        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == nameless.Id)).DisplayName); // nothing was written through the back door
+        Assert.Null((await _db.Users.AsNoTracking().SingleAsync(u => u.Id == nameless.Id)).FirstName); // nothing was written through the back door
     }
 
     /// <summary>Right before the user row is updated, changes its concurrency stamp from another connection.</summary>

@@ -12,10 +12,11 @@ public class RegisterCommandValidatorTests
     private readonly RegisterCommandValidator _validator = new();
 
     [Fact]
-    public void AValidCommand_Passes_WithOrWithoutAName()
+    public void AValidCommand_Passes_WithOrWithoutNames()
     {
         _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!")).ShouldNotHaveAnyValidationErrors();
         _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada")).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada", "Lovelace")).ShouldNotHaveAnyValidationErrors();
     }
 
     [Theory]
@@ -47,12 +48,24 @@ public class RegisterCommandValidatorTests
     }
 
     [Fact]
-    public void TheDisplayName_IsOptional_BlankIsFine_AndMayHave100Characters()
+    public void TheFirstName_IsOptional_BlankIsFine_AndMayHave100Characters()
     {
-        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", null)).ShouldNotHaveValidationErrorFor(x => x.DisplayName);
-        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "   ")).ShouldNotHaveValidationErrorFor(x => x.DisplayName);
-        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", new string('n', 100))).ShouldNotHaveValidationErrorFor(x => x.DisplayName);
-        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", new string('n', 101))).ShouldHaveValidationErrorFor(x => x.DisplayName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", null)).ShouldNotHaveValidationErrorFor(x => x.FirstName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "   ")).ShouldNotHaveValidationErrorFor(x => x.FirstName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", new string('n', 100))).ShouldNotHaveValidationErrorFor(x => x.FirstName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", new string('n', 101))).ShouldHaveValidationErrorFor(x => x.FirstName);
+    }
+
+    [Fact]
+    public void TheLastName_IsOptional_BlankIsFine_AndMayHave100Characters_IndependentlyOfTheFirstName()
+    {
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada", null)).ShouldNotHaveValidationErrorFor(x => x.LastName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada", "   ")).ShouldNotHaveValidationErrorFor(x => x.LastName);
+        _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", new string('n', 100), new string('n', 100))).ShouldNotHaveAnyValidationErrors();
+
+        var tooLong = _validator.TestValidate(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada", new string('n', 101)));
+        tooLong.ShouldHaveValidationErrorFor(x => x.LastName);
+        tooLong.ShouldNotHaveValidationErrorFor(x => x.FirstName);
     }
 }
 

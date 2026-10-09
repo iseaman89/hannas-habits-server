@@ -30,9 +30,9 @@ public class IdentityService : IIdentityService
         _db = db;
     }
 
-    public async Task<IdentityUserDto> RegisterAsync(string email, string password, string? displayName, CancellationToken cancellationToken = default)
+    public async Task<IdentityUserDto> RegisterAsync(string email, string password, string? firstName, string? lastName, CancellationToken cancellationToken = default)
     {
-        var user = NewUser(email, displayName);
+        var user = NewUser(email, firstName, lastName);
 
         IdentityResult result;
         try
@@ -73,11 +73,11 @@ public class IdentityService : IIdentityService
         var existing = await _userManager.FindByLoginAsync(identity.Provider, identity.Subject);
         if (existing is not null)
         {
-            await FillMissingDisplayNameAsync(existing, identity.DisplayName);
+            await FillMissingNameAsync(existing, identity.FirstName, identity.LastName);
             return existing.ToDto();
         }
 
-        var user = NewUser(identity.Email, identity.DisplayName);
+        var user = NewUser(identity.Email, identity.FirstName, identity.LastName);
         user.EmailConfirmed = true; // Google verified it (the verifier rejects tokens without a verified email)
 
         try
@@ -113,23 +113,23 @@ public class IdentityService : IIdentityService
         return user.ToDto();
     }
 
-    private static ApplicationUser NewUser(string email, string? displayName)
+    private static ApplicationUser NewUser(string email, string? firstName, string? lastName)
     {
         var user = new ApplicationUser { Id = Guid.NewGuid(), Email = email, UserName = email };
-        user.SetDisplayName(displayName);
+        user.SetName(firstName, lastName);
         return user;
     }
 
-    // Accounts created by a Google sign-in before display names existed have none. The name is cosmetic, so this is best
+    // Accounts created by a Google sign-in before names existed have none. The name is cosmetic, so this is best
     // effort: it is only filled in, never overwritten (the user may choose their own name later), and a failed update -
     // e.g. a parallel sign-in that was faster - must not fail the login. The next sign-in tries again.
-    private async Task FillMissingDisplayNameAsync(ApplicationUser user, string? providerName)
+    private async Task FillMissingNameAsync(ApplicationUser user, string? providerFirstName, string? providerLastName)
     {
-        if (user.DisplayName is not null)
+        if (user.HasName)
             return;
 
-        user.SetDisplayName(providerName);
-        if (user.DisplayName is null)
+        user.SetName(providerFirstName, providerLastName);
+        if (!user.HasName)
             return;
 
         var result = await _userManager.UpdateAsync(user);

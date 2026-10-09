@@ -29,12 +29,12 @@ public sealed class TestUser
 
     public static string NewEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
-    public static async Task<TestUser> RegisterAsync(ApiFactory api, string? displayName = null, string? email = null)
+    public static async Task<TestUser> RegisterAsync(ApiFactory api, string? firstName = null, string? email = null, string? lastName = null)
     {
         email ??= NewEmail();
         var anonymous = new ApiClient(api.CreateClient());
 
-        var response = await anonymous.PostAsync("/api/auth/register", new { email, password = Password, displayName });
+        var response = await anonymous.PostAsync("/api/auth/register", new { email, password = Password, firstName, lastName });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.ReadJsonAsync();

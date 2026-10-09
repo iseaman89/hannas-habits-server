@@ -9,9 +9,9 @@ public interface IIdentityService
     /// <summary>
     /// Creates an account. Throws <see cref="FluentValidation.ValidationException"/> (key <c>password</c>) if the password
     /// violates the password policy and <see cref="Common.Exceptions.ConflictException"/> if the email is taken.
-    /// A blank <paramref name="displayName"/> counts as "none given".
+    /// A blank <paramref name="firstName"/> or <paramref name="lastName"/> counts as "none given".
     /// </summary>
-    Task<IdentityUserDto> RegisterAsync(string email, string password, string? displayName, CancellationToken cancellationToken = default);
+    Task<IdentityUserDto> RegisterAsync(string email, string password, string? firstName, string? lastName, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Checks email + password and counts failures towards a lockout. Throws
@@ -24,11 +24,12 @@ public interface IIdentityService
     /// Finds the account that belongs to an external (Google) identity, or creates it on first sight.
     /// An existing password account with the same email is <b>not</b> taken over silently - that throws a
     /// <see cref="Common.Exceptions.ConflictException"/> (see the implementation for why).
-    /// A new account takes the provider's name; an existing one only gets it if it has no display name yet.
+    /// A new account takes the provider's names; an existing one only gets them if it has no name yet.
     /// </summary>
     Task<IdentityUserDto> SignInWithExternalAsync(ExternalIdentity identity, CancellationToken cancellationToken = default);
 }
 
 /// <summary>What an external identity provider vouches for after its token has been verified.</summary>
-/// <param name="DisplayName">The name the provider shows for the account; optional, Google does not always send one.</param>
-public record ExternalIdentity(string Provider, string Subject, string Email, string? DisplayName = null);
+/// <param name="FirstName">The given name the provider knows; optional, Google does not always send one.</param>
+/// <param name="LastName">The family name; optional.</param>
+public record ExternalIdentity(string Provider, string Subject, string Email, string? FirstName = null, string? LastName = null);

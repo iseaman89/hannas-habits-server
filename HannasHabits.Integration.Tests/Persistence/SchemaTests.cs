@@ -266,7 +266,8 @@ public class SchemaTests : IAsyncLifetime
         Assert.Equal(("integer", "NO"), TypeOf("Resolutions.Year"));
         Assert.Equal(("uuid", "YES"), TypeOf("Resolutions.HabitId"));
         Assert.Equal(("character varying", "NO"), TypeOf("RefreshTokens.TokenHash"));
-        Assert.Equal(("character varying", "YES"), TypeOf("AspNetUsers.DisplayName"));
+        Assert.Equal(("character varying", "YES"), TypeOf("AspNetUsers.FirstName"));
+        Assert.Equal(("character varying", "YES"), TypeOf("AspNetUsers.LastName"));
 
         // No default for the start date: one that the check constraint rejects (0001-01-01) would be a trap for any insert
         // that forgets the column.

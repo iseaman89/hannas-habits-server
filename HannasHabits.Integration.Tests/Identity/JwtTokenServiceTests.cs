@@ -48,7 +48,7 @@ public class JwtTokenServiceTests : IAsyncLifetime
     {
         var id = await Sql.InsertUserAsync(_db);
         var email = (await _db.Users.AsNoTracking().SingleAsync(u => u.Id == id)).Email!;
-        return new IdentityUserDto(id, email, email, name ?? "ada");
+        return new IdentityUserDto(id, email, email, name ?? "ada", null);
     }
 
     private async Task<T> InScope<T>(Func<IJwtTokenService, Task<T>> action)

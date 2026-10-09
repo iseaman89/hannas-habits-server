@@ -31,22 +31,23 @@ public class AuthHandlerTests
     public async Task Register_CreatesTheAccount_ThenIssuesTokensForIt()
     {
         var result = await new RegisterCommandHandler(_identity, _tokens)
-            .Handle(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada"), CancellationToken.None);
+            .Handle(new RegisterCommand("ada@example.com", "Passw0rd!", "Ada", "Lovelace"), CancellationToken.None);
 
         Assert.Equal(["identity.register", "tokens.create"], _calls);
-        Assert.Equal(("ada@example.com", "Passw0rd!", "Ada"),
-            (_identity.RegisteredEmail, _identity.RegisteredPassword, _identity.RegisteredDisplayName));
+        Assert.Equal(("ada@example.com", "Passw0rd!", "Ada", "Lovelace"),
+            (_identity.RegisteredEmail, _identity.RegisteredPassword, _identity.RegisteredFirstName, _identity.RegisteredLastName));
         Assert.Same(FakeIdentityService.DefaultUser, _tokens.IssuedFor);
         Assert.Equal(new AuthResult(FakeIdentityService.DefaultUser, FakeJwtTokenService.DefaultTokens), result);
     }
 
     [Fact]
-    public async Task Register_WithoutAName_PassesNullOn()
+    public async Task Register_WithoutNames_PassesNullOn()
     {
         await new RegisterCommandHandler(_identity, _tokens)
             .Handle(new RegisterCommand("ada@example.com", "Passw0rd!"), CancellationToken.None);
 
-        Assert.Null(_identity.RegisteredDisplayName);
+        Assert.Null(_identity.RegisteredFirstName);
+        Assert.Null(_identity.RegisteredLastName);
     }
 
     [Fact]

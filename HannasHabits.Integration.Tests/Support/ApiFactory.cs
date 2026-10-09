@@ -99,21 +99,23 @@ public sealed class LogCollector : ILoggerProvider
 }
 
 /// <summary>
-/// Accepts tokens of the form <c>google:{subject}:{email}[:{name}]</c> and rejects everything else, like Google would
-/// reject a forged token.
+/// Accepts tokens of the form <c>google:{subject}:{email}[:{firstName}[:{lastName}]]</c> and rejects everything else,
+/// like Google would reject a forged token.
 /// </summary>
 public sealed class FakeGoogleTokenVerifier : IGoogleTokenVerifier
 {
-    public static string TokenFor(string subject, string email, string? name = null)
-        => $"google:{subject}:{email}" + (name is null ? "" : $":{name}");
+    public static string TokenFor(string subject, string email, string? firstName = null, string? lastName = null)
+        => $"google:{subject}:{email}" + (firstName is null && lastName is null ? "" : $":{firstName}:{lastName}");
 
     public Task<ExternalIdentity> VerifyAsync(string idToken, CancellationToken cancellationToken = default)
     {
-        var parts = idToken.Split(':', 4);
+        var parts = idToken.Split(':', 5);
 
         if (parts.Length < 3 || parts[0] != "google")
             throw new AuthenticationFailedException("The Google token is not valid.");
 
-        return Task.FromResult(new ExternalIdentity("Google", parts[1], parts[2], parts.Length == 4 ? parts[3] : null));
+        string? Part(int index) => parts.Length > index && parts[index].Length > 0 ? parts[index] : null;
+
+        return Task.FromResult(new ExternalIdentity("Google", parts[1], parts[2], Part(3), Part(4)));
     }
 }

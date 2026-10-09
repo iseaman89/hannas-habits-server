@@ -17,6 +17,7 @@ public class MigrationTests
     private const string AddHabitSchedule = "20261008084030_AddHabitSchedule";
     private const string AddDisplayName = "20261008093012_AddDisplayName";
     private const string AddResolutions = "20261008095909_AddResolutions";
+    private const string AddHabitStartDate = "20261008100741_AddHabitStartDate";
 
     private readonly TestEnvironment _environment;
 
@@ -190,6 +191,47 @@ public class MigrationTests
         Assert.Empty(entry.Learned);
         Assert.Empty(entry.Tasks);
     }
+
+    [Fact]
+    public async Task SplitDisplayName_TakesTheFirstWordAsTheFirstName_AndTheRestAsTheLastName_AndRollbackJoinsThemAgain()
+    {
+        await using var db = await BlankDatabaseAsync();
+        await MigrateTo(db, AddHabitStartDate);
+        var single = await Sql.InsertUserAsync(db);
+        var two = await Sql.InsertUserAsync(db);
+        var many = await Sql.InsertUserAsync(db);
+        var tab = await Sql.InsertUserAsync(db);
+        var nameless = await Sql.InsertUserAsync(db);
+        await SetDisplayName(db, single, "Hanna");
+        await SetDisplayName(db, two, "Hanna Müller");
+        await SetDisplayName(db, many, "Anna Maria  von Schmidt");
+        await SetDisplayName(db, tab, "Jörg\tMüller");
+
+        await MigrateTo(db);
+
+        var names = await db.Users.AsNoTracking().ToDictionaryAsync(u => u.Id, u => (u.FirstName, u.LastName));
+        Assert.Equal(("Hanna", null), names[single]);                   // one word: only a first name
+        Assert.Equal(("Hanna", "Müller"), names[two]);
+        Assert.Equal(("Anna", "Maria  von Schmidt"), names[many]);      // the rest, as typed
+        Assert.Equal(("Jörg", "Müller"), names[tab]);                   // any white space separates, not only a blank
+        Assert.Equal((null, null), names[nameless]);                    // no name stays no name
+        Assert.False(await ColumnExistsAsync(db, "AspNetUsers", "DisplayName"));
+
+        await MigrateTo(db, AddHabitStartDate);
+
+        Assert.False(await ColumnExistsAsync(db, "AspNetUsers", "FirstName"));
+        Assert.Equal("Hanna", await DisplayNameOf(db, single));
+        Assert.Equal("Hanna Müller", await DisplayNameOf(db, two));
+        Assert.Equal("Anna Maria  von Schmidt", await DisplayNameOf(db, many));
+        Assert.Equal("Jörg Müller", await DisplayNameOf(db, tab));
+        Assert.Equal("<none>", await DisplayNameOf(db, nameless));
+    }
+
+    private static Task SetDisplayName(ApplicationDbContext db, Guid user, string name)
+        => db.Database.ExecuteSqlInterpolatedAsync($"""UPDATE "AspNetUsers" SET "DisplayName" = {name} WHERE "Id" = {user}""");
+
+    private static async Task<string> DisplayNameOf(ApplicationDbContext db, Guid user)
+        => (await db.Database.SqlQuery<string>($"""SELECT COALESCE("DisplayName", '<none>') AS "Value" FROM "AspNetUsers" WHERE "Id" = {user}""").ToListAsync()).Single();
 
     [Fact]
     public async Task HashRefreshTokens_EndsEveryPlainTextSession_TheyCannotBeConvertedToHashes()
