@@ -1,0 +1,16 @@
+# Keeps the build context small and makes sure no local build output, secret or IDE state ends up in an image.
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.DS_Store
+**/*.user
+.git/
+.github/
+.env
+.env.*
+docs/
+*.md
+*.http
+# Tests are not part of the image (the Dockerfile only copies the four production projects anyway).
+HannasHabits.*.Tests/

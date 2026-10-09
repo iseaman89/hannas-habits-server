@@ -1,41 +1,38 @@
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Application.Habits;
+using HannasHabits.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.HabitRecords.Commands.UnmarkCompleted;
 
 public class UnmarkCompletedCommandHandler : IRequestHandler<UnmarkCompletedCommand, Unit>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
+    private readonly IHabitRepository _habits;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
 
-    public UnmarkCompletedCommandHandler(IApplicationDbContext context, IUserContextService userContextService)
+    public UnmarkCompletedCommandHandler(IHabitRepository habits, IUnitOfWork unitOfWork, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
+        _habits = habits;
+        _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
     }
 
     public async Task<Unit> Handle(UnmarkCompletedCommand request, CancellationToken cancellationToken)
     {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var habit = await _context.Habits
-            .Include(h => h.Records)
-            .Where(h => h.Id == request.HabitId && h.UserId == userId.Value)
-            .FirstOrDefaultAsync(cancellationToken);
+        var habit = await _habits.GetByIdWithRecordsAsync(_currentUser.UserId, request.HabitId, cancellationToken);
 
         if (habit is null)
-            throw new Exception("Habit not found");
+            throw new NotFoundException(nameof(Habit), request.HabitId);
 
-        var record = habit.Records.FirstOrDefault(r => r.Date == request.Date);
+        // The Domain only allows taking back a completed day; for the API an unmarked day is a missing resource (404).
+        if (habit.RecordOn(request.Date) is null)
+            throw new NotFoundException(nameof(HabitRecord), request.Date.ToString("O"));
 
-        if (record is null)
-            throw new Exception("Record not found for this date");
+        habit.UnmarkCompleted(request.Date);
 
-        _context.HabitRecords.Remove(record);
-
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Unit.Value;
     }

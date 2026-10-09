@@ -25,8 +25,10 @@ namespace HannasHabits.Infrastructure.Migrations
             modelBuilder.Entity("HannasHabits.Domain.Entities.DailyDiary", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("Body")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -34,10 +36,27 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
-                    b.Property<string>("Text")
+                    b.Property<string[]>("Grateful")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Highlight")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<string[]>("Learned")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<int?>("Mind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Mood")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Tasks")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -47,13 +66,19 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.HasIndex("UserId", "Date")
                         .IsUnique();
 
-                    b.ToTable("DailyDiary", (string)null);
+                    b.ToTable("DailyDiary", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DailyDiary_Body", "\"Body\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_DailyDiary_Mind", "\"Mind\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_DailyDiary_Mood", "\"Mood\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("HannasHabits.Domain.Entities.Habit", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -62,6 +87,12 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Schedule")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -75,13 +106,17 @@ namespace HannasHabits.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Habits", (string)null);
+                    b.ToTable("Habits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Habits_Schedule", "\"Schedule\" BETWEEN 1 AND 127");
+
+                            t.HasCheckConstraint("CK_Habits_StartDate", "\"StartDate\" BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'");
+                        });
                 });
 
             modelBuilder.Entity("HannasHabits.Domain.Entities.HabitRecord", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -101,32 +136,41 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.ToTable("HabitRecords", (string)null);
                 });
 
-            modelBuilder.Entity("HannasHabits.Domain.Entities.User", b =>
+            modelBuilder.Entity("HannasHabits.Domain.Entities.Resolution", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
+                    b.Property<Guid?>("HabitId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<bool>("Kept")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("Username")
+                    b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users", (string)null);
+                    b.HasIndex("HabitId");
+
+                    b.HasIndex("UserId", "Year");
+
+                    b.ToTable("Resolutions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Resolutions_Year", "\"Year\" BETWEEN 2000 AND 2100");
+                        });
                 });
 
             modelBuilder.Entity("HannasHabits.Infrastructure.Identity.ApplicationUser", b =>
@@ -148,6 +192,14 @@ namespace HannasHabits.Infrastructure.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
@@ -197,7 +249,6 @@ namespace HannasHabits.Infrastructure.Migrations
             modelBuilder.Entity("HannasHabits.Infrastructure.Identity.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -206,20 +257,32 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsRevoked")
-                        .HasColumnType("boolean");
+                    b.Property<Guid?>("ReplacedByTokenId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("ReplacedByToken")
-                        .HasColumnType("text");
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -354,10 +417,19 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.DailyDiary", b =>
+                {
+                    b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.Habit", b =>
                 {
-                    b.HasOne("HannasHabits.Domain.Entities.User", null)
-                        .WithMany("Habits")
+                    b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -368,6 +440,29 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.HasOne("HannasHabits.Domain.Entities.Habit", null)
                         .WithMany("Records")
                         .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.Resolution", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.Habit", null)
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Infrastructure.Identity.RefreshToken", b =>
+                {
+                    b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -426,11 +521,6 @@ namespace HannasHabits.Infrastructure.Migrations
             modelBuilder.Entity("HannasHabits.Domain.Entities.Habit", b =>
                 {
                     b.Navigation("Records");
-                });
-
-            modelBuilder.Entity("HannasHabits.Domain.Entities.User", b =>
-                {
-                    b.Navigation("Habits");
                 });
 #pragma warning restore 612, 618
         }

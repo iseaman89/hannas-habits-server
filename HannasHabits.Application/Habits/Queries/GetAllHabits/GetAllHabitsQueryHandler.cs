@@ -1,33 +1,20 @@
 using HannasHabits.Application.Common.Interfaces;
-using MapsterMapper;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace HannasHabits.Application.Habits.Queries.GetAllHabits;
 
-public class GetAllHabitsQueryHandler 
+public class GetAllHabitsQueryHandler
     : IRequestHandler<GetAllHabitsQuery, List<HabitListItemDto>>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IUserContextService _userContextService;
-    private readonly IMapper _mapper;
+    private readonly IHabitQueries _habitQueries;
+    private readonly ICurrentUser _currentUser;
 
-    public GetAllHabitsQueryHandler(IApplicationDbContext context, IUserContextService userContextService, IMapper mapper)
+    public GetAllHabitsQueryHandler(IHabitQueries habitQueries, ICurrentUser currentUser)
     {
-        _context = context;
-        _userContextService = userContextService;
-        _mapper = mapper;
+        _habitQueries = habitQueries;
+        _currentUser = currentUser;
     }
 
-    public async Task<List<HabitListItemDto>> Handle(GetAllHabitsQuery request, CancellationToken cancellationToken)
-    {
-        var userId = _userContextService.UserId;
-        if (userId is null) throw new UnauthorizedAccessException();
-        
-        var habits = await _context.Habits
-            .Where(h => h.UserId == userId.Value)
-            .ToListAsync(cancellationToken);
-
-        return _mapper.Map<List<HabitListItemDto>>(habits);
-    }
+    public Task<List<HabitListItemDto>> Handle(GetAllHabitsQuery request, CancellationToken cancellationToken)
+        => _habitQueries.GetAllAsync(_currentUser.UserId, cancellationToken);
 }

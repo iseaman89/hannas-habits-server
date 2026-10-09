@@ -1,45 +1,29 @@
-using System.Text;
-using HannasHabits.Infrastructure;
 using HannasHabits.Application;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-
+using HannasHabits.Infrastructure;
+using HannasHabits.WebApi;
+using HannasHabits.WebApi.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 // Layers
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApplication();
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(options =>
-{
-    var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
-    };
-});
-builder.Services.AddAuthorization();
-
+builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddWebApi(builder.Configuration);
 
 var app = builder.Build();
 
+await app.ApplyMigrationsIfConfiguredAsync();
+
+// First, so it also catches exceptions thrown by everything below.
+app.UseExceptionHandler();
+
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseHttpsRedirection();
+
+// Before authentication, so CORS preflight (OPTIONS) requests are answered without a token.
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -47,3 +31,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Makes the top-level Program visible to WebApplicationFactory<Program> in the integration tests.
+public partial class Program;

@@ -1,6 +1,4 @@
 using HannasHabits.Application.Habits.Commands.CreateHabit;
-using HannasHabits.Application.Habits.Queries.GetAllHabits;
-using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Domain.Entities;
 using Mapster;
 
@@ -10,8 +8,9 @@ public class HabitMapping : IRegister
 {
     public void Register(TypeAdapterConfig config)
     {
-        config.NewConfig<Habit, CreateHabitDto>();
-        config.NewConfig<Habit, HabitDetailsDto>();
-        config.NewConfig<Habit, HabitListItemDto>();
+        // Title and Schedule are value objects; the DTO carries their plain values.
+        config.NewConfig<Habit, CreateHabitDto>()
+            .Map(dto => dto.Title, habit => habit.Title.Value)
+            .Map(dto => dto.Schedule, habit => habit.Schedule.Days);
     }
 }

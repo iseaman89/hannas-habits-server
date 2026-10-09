@@ -1,6 +1,180 @@
-@HannasHabits.WebApi_HostAddress = http://localhost:5016
+# Manual API smoke tests (JetBrains HTTP Client syntax; response handlers store tokens/ids for the next requests).
+# Run top to bottom: register (once) or login first, then the rest.
+# Use https: the API redirects http -> https, and a CORS preflight / POST to the http URL would get a 307.
+# The ASP.NET dev certificate must be trusted: dotnet dev-certs https --trust
 
-GET {{HannasHabits.WebApi_HostAddress}}/weatherforecast/
-Accept: application/json
+@host = https://localhost:7054
+# Throw-away dev account - not a real password.
+@email = dev@example.com
+@password = Dev-Passw0rd!
+@date = 2026-10-08
 
-###
+### Register (first time only) - 200 with { user, tokens }; 409 if the email exists, 400 for a weak password
+# displayName is optional (max 100 chars, trimmed); user.displayName falls back to the email's local part.
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}", "displayName": "Dev User" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Google login - 200 with { user, tokens }
+# Needs a real Google ID token (JWT) issued for our client id (Google:ClientId), e.g. from the frontend's Google sign-in.
+# 401 if the token is invalid, 409 if a password account with that email already exists.
+POST {{host}}/api/auth/google
+Content-Type: application/json
+
+{ "idToken": "<paste a Google ID token here>" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Refresh the token pair - 200 with { user, tokens }
+# A refresh token works exactly once: the response carries a NEW one (the handler below stores it).
+# Sending an already used one again counts as theft - 401 and every session of the user is revoked.
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+> {%
+    client.global.set("accessToken", response.body.tokens.accessToken);
+    client.global.set("refreshToken", response.body.tokens.refreshToken);
+%}
+
+### Create a habit - 201 + Location header
+# schedule = planned days of the week (0 = Sunday ... 6 = Saturday); omit it for "every day".
+# startDate = first day the habit applies (yyyy-MM-dd, your local date; 2000-01-01 .. 2100-12-31); omit it for "today".
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 20 pages", "description": "Before bed", "schedule": [1, 2, 3, 4, 5], "startDate": "{{date}}" }
+
+> {%
+    client.global.set("habitId", response.body.id);
+%}
+
+### List habits
+GET {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+
+### Habit overview for the month grid / the "today" panel - 200
+# One call instead of 1 + N: per habit its plan, startDate, the completed days between from and to (inclusive, both
+# required, oldest first) and currentStreak as of asOf (= your local today; omitted = the server's UTC date).
+# The streak counts scheduled days in a row back from asOf, independent of from/to (it can span months).
+GET {{host}}/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf={{date}}
+Authorization: Bearer {{accessToken}}
+
+### Get one habit
+GET {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Update a habit - 204 (replaces title, description and schedule; the schedule is required here)
+PUT {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 30 pages", "description": "Before bed", "schedule": [0, 1, 2, 3, 4, 5, 6] }
+
+### Mark a day as completed - 200; repeating it returns the same record (idempotent)
+PUT {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### List records (from/to optional, inclusive)
+GET {{host}}/api/habits/{{habitId}}/records?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{accessToken}}
+
+### Unmark a day - 204 (404 if the day was not marked)
+DELETE {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Delete the habit (its records go with it) - 204
+DELETE {{host}}/api/habits/{{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Save the diary entry of a day - 204. One document per user+date: creates or replaces it (idempotent, last write wins).
+### Everything left out is cleared. mood 1 (rough) - 5 (great), body/mind 0-100. A completely empty document removes the entry.
+PUT {{host}}/api/daily-diaries/{{date}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "mood": 4,
+  "body": 70,
+  "mind": 55,
+  "highlight": "A good day.",
+  "grateful": ["Coffee", "Sunshine"],
+  "learned": ["Waiting pays off"],
+  "tasks": [
+    { "title": "Call mum", "done": true },
+    { "title": "Write the report", "done": false }
+  ]
+}
+
+### Get the entry of a day - 200; 404 = nothing written for that day yet
+GET {{host}}/api/daily-diaries/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Days with an entry and their mood, oldest first (calendar) - from/to inclusive and optional
+GET {{host}}/api/daily-diaries?from=2026-01-01&to=2026-12-31
+Authorization: Bearer {{accessToken}}
+
+### Delete the entry of a day - 204; 404 if there is none
+DELETE {{host}}/api/daily-diaries/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Resolutions of a year, in creation order - 200; a year without any answers with an empty list. Years 2000-2100.
+GET {{host}}/api/resolutions/2026
+Authorization: Bearer {{accessToken}}
+
+### Add a resolution - 201 with the item (Location = the year's list). At most 50 per year (400 beyond that).
+# habitId is optional: a habit of the user that tracks this resolution (400 errors.habitId if it is not theirs).
+POST {{host}}/api/resolutions/2026/items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 12 books", "habitId": "{{habitId}}" }
+
+> {%
+    client.global.set("resolutionId", response.body.id);
+%}
+
+### Mark a resolution kept - 204. The PUT replaces title, kept and habit link: leave habitId out to remove the link,
+### "kept" is required (400 if missing, so a forgotten value cannot re-open it). 404 for a wrong year or another user's item.
+PUT {{host}}/api/resolutions/2026/items/{{resolutionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Read 12 books", "kept": true, "habitId": "{{habitId}}" }
+
+### Delete a resolution - 204; 404 if there is none. (Deleting the linked habit keeps the resolution and only clears the link.)
+DELETE {{host}}/api/resolutions/2026/items/{{resolutionId}}
+Authorization: Bearer {{accessToken}}
+
+### Revoke one refresh token (logout of this session) - 204, also for unknown / already revoked tokens
+POST {{host}}/api/auth/revoke
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+### Revoke all refresh tokens of the user - 204
+POST {{host}}/api/auth/revoke-all
+Authorization: Bearer {{accessToken}}

@@ -1,18 +1,21 @@
 using System.Reflection;
+using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
 using HannasHabits.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace HannasHabits.Infrastructure.Persistence;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IApplicationDbContext
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IUnitOfWork
 {
     public DbSet<Habit> Habits => Set<Habit>();
     public DbSet<HabitRecord> HabitRecords => Set<HabitRecord>();
     public DbSet<DailyDiary> DailyDiaries => Set<DailyDiary>();
+    public DbSet<Resolution> Resolutions => Set<Resolution>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
@@ -22,36 +25,34 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
         builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         base.OnModelCreating(builder);
     }
-}
 
-// public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
-// {
-//     public DbSet<Habit> Habits { get; set; }
-//     public DbSet<Completion> Completions { get; set; }
-//     public DbSet<DailyDiary> DailyDiaries { get; set; }
-//     public DbSet<DailyTask> DailyTasks { get; set; }
-//     public DbSet<YearResolution> YearResolutions { get; set; }
-//     public DbSet<Resolution> HabitRecords { get; set; }
-//     
-//
-//     protected override void OnModelCreating(ModelBuilder modelBuilder)
-//     {
-//         modelBuilder.Entity<Habit>()
-//             .HasMany(h => h.Completions)
-//             .WithOne(c => c.Habit)
-//             .HasForeignKey(c => c.HabitId)
-//             .OnDelete(DeleteBehavior.Cascade);
-//         
-//         modelBuilder.Entity<DailyDiary>()
-//             .HasMany(dd => dd.DailyTasks)
-//             .WithOne(dt => dt.DailyDiary)
-//             .HasForeignKey(dt => dt.DailyDiaryId)
-//             .OnDelete(DeleteBehavior.Cascade);
-//
-//         modelBuilder.Entity<YearResolution>()
-//             .HasMany(y => y.HabitRecords)
-//             .WithOne(r => r.YearResolutions)
-//             .HasForeignKey(r => r.YearResolutionsId)
-//             .OnDelete(DeleteBehavior.Cascade);
-//     }
-// }
+    // Explicit interface implementation on purpose: only the application's use cases get application-level exceptions.
+    // ASP.NET Identity calls the context directly and relies on the raw EF exceptions (e.g. its concurrency handling).
+    async Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            // e.g. two requests delete the same row: the second one finds nothing to delete.
+            throw new ConflictException("The resource was changed by another request. Please retry.", exception);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                                                  {
+                                                      SqlState: PostgresErrorCodes.UniqueViolation
+                                                  })
+        {
+            throw new DuplicateEntryException(exception);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                                                  {
+                                                      SqlState: PostgresErrorCodes.ForeignKeyViolation
+                                                  })
+        {
+            // e.g. the habit a new resolution links to was deleted by another request in the meantime.
+            throw new ConflictException("A related resource no longer exists. Please retry.", exception);
+        }
+    }
+}

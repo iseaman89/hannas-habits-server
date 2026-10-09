@@ -1,0 +1,51 @@
+# API + PostgreSQL for a local or single-server run. The frontend is a separate repository (hannas-habits-ui).
+#
+#   cp .env.example .env     # then fill in the values
+#   docker compose up --build
+#
+# The API answers on http://localhost:${API_PORT:-8080} (Swagger at /swagger). It runs in Production mode and speaks plain
+# HTTP: for HTTPS put a reverse proxy in front.
+
+name: hannas-habits
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hannashabits
+      POSTGRES_USER: hannashabits
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hannashabits -d hannashabits"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: HannasHabits.WebApi/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      ConnectionStrings__DbConnection: Host=db;Port=5432;Database=hannashabits;Username=hannashabits;Password=${POSTGRES_PASSWORD}
+      # One instance with its own database: let the API create/update the schema at startup.
+      # With more than one instance, migrate as a separate deployment step instead and remove this line.
+      Database__MigrateOnStartup: "true"
+      Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env (at least 32 characters, see .env.example)}
+      Jwt__Issuer: ${JWT_ISSUER:-hannas-habits}
+      Jwt__Audience: ${JWT_AUDIENCE:-hannas-habits-ui}
+      Google__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env (the OAuth client id of the frontend)}
+      MediatR__LicenseKey: ${MEDIATR_LICENSE_KEY:-}
+      # Origin(s) of the frontend. Add Cors__AllowedOrigins__1, ... for more.
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:5173}
+
+volumes:
+  db-data:

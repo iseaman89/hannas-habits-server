@@ -1,0 +1,204 @@
+# Design brief — Hanna's Habits
+
+Written in roadmap step **M1** (2026-10-08) so later sessions read this file instead of re-importing the mockup.
+
+- **Source:** claude.ai/design project "Hannas Habits UI-Redesign" (`a388ae78-c586-4176-a236-83ee88bef383`), file `Hannas Habits App.dc.html` (one interactive prototype with all screens), design system "Organic" (`_ds/organic-…/styles.css`, `readme.md`). Project last synced from the old frontend on 2026-10-07. `_ds_bundle.js` is empty (no components) and `support.js` is only the prototype runtime — neither carries design information. The project also holds `Hannas Habits.dc.html` and `Sidebar.dc.html` (recreations of the *old* screens, not read).
+- **How it was read:** `DesignSync` read methods after `/design-login` (the `claude_design` MCP server itself was not configured in the session).
+- The prototype is demo data + inline styles. It is a **visual reference, not code to copy**: rebuild it with Tailwind 4 tokens and typed components (F2+). Where it is wrong or incomplete, see "Gaps and deviations" below.
+
+## 1. Design language ("Organic")
+
+Warm, rounded, a little playful. Cream-and-sand ground, terracotta accent, sage second accent. Caprasimo display headings over Figtree body. Over-rounded containers, **pill** buttons/inputs/tags (`999px`), circles as the main shape (habit cells, mood buttons, resolution numbers, calendar days). Left-aligned layouts with air; no hairline-only geometry, no greys (warmth is the point). Icons: **Lucide, stroke-width 2.75**. Interactive states are themed (hover tint, pressed = one ramp step further, 2px accent `:focus-visible` ring) — never browser defaults. Disabled = 45 % opacity.
+
+## 2. Tokens
+
+### 2.1 Roles
+
+| Token | Light | Dark |
+|---|---|---|
+| `bg` | `#f5ead8` | `#1d1a17` |
+| `surface` | `#ebddc5` | `#2a2520` |
+| `text` | `#201e1d` | `#f3e8d6` |
+| `accent` (terracotta) | `#c67139` | `#d67f48` |
+| `accent-2` (sage) | `#7a8a5e` | `#8fa073` |
+| `divider` | `text` @ 16 % | `text` @ 18 % |
+
+### 2.2 Ramps (100 → 900)
+
+Three ramps, generated on one lightness scale. **The dark ramps are the light ramps reversed** (dark step *n* = light step *10−n*), so define the light values once and flip the order under `[data-theme="dark"]`.
+
+| Step | neutral | accent | accent-2 |
+|---|---|---|---|
+| 100 | `#f9f4ed` | `#fff2eb` | `#f0fae1` |
+| 200 | `#eee7db` | `#ffe1d0` | `#e1eecc` |
+| 300 | `#dcd3c4` | `#ffc6a5` | `#ccdbb2` |
+| 400 | `#c0b6a5` | `#f6a06b` | `#aebf92` |
+| 500 | `#a19786` | `#d67f48` | `#8fa073` |
+| 600 | `#82796a` | `#b2622d` | `#728157` |
+| 700 | `#645c50` | `#8c491a` | `#56633f` |
+| 800 | `#474238` | `#643312` | `#3d472b` |
+| 900 | `#2e2b25` | `#402310` | `#272e1b` |
+
+Usage: 100–300 tinted fills/hovers/borders, 500 base, 700–900 text on tints and pressed states. Paragraph-size accent text uses `accent-700`, not `accent` (contrast). Links: `accent-700`, hover `accent-800`.
+
+### 2.3 App-specific tokens (not in the design system — defined in the prototype)
+
+Mood scale (calendar days + mood picker) and habit "missed":
+
+| Token | Meaning | Light bg / fg | Dark bg / fg |
+|---|---|---|---|
+| `--hh-m0` / `--hh-f0` | Great | `#728157` / `bg` | `#aebf92` / `#1d1a17` |
+| `--hh-m1` / `--hh-f1` | Good | `#ccdbb2` / `#272e1b` | `#56633f` / `#f3e8d6` |
+| `--hh-m2` / `--hh-f2` | Okay | `#dcd3c4` / `#2e2b25` | `#a19786` / `#1d1a17` |
+| `--hh-m3` / `--hh-f3` | Low | `#ffc6a5` / `#402310` | `#b2622d` / `#f3e8d6` |
+| `--hh-m4` / `--hh-f4` | Rough | `#d67f48` / `bg` | `#ffc6a5` / `#1d1a17` |
+| `--hh-miss` | habit cell "missed" | `#ffe1d0` | `#8c491a` |
+
+**Implemented in F2** (`src/shared/ui/theme.css` in the frontend; use these, not the mockup's names): roles `bg`, `surface`, `text`, `accent`, `accent-2`, `divider` (+ `accent-hover`, `accent-pressed`, `backdrop`); ramps `neutral-*`, `accent-*`, `accent-2-*` (dark = mirrored, automatically); mood fills `mood-great|good|okay|low|rough` with their text colour `on-mood-*` (= mockup `--hh-m0..m4` / `--hh-f0..f4`, **index 0 = great = API value 5** — the names avoid that flip); `miss` (= `--hh-miss`). Utilities: `bg-mood-great text-on-mood-great`, `bg-miss`, `rounded-card`, `font-display`, `text-page|dialog|card|kicker`.
+
+### 2.4 Type, space, radius, elevation
+
+- **Fonts** (Google Fonts): `Caprasimo` 400 for headings/buttons/numbers, `Figtree` 400/600/700 for body. Base 15 px / 1.55. Headings: line-height 1.12, letter-spacing −0.015em. Page title (`h1`) 44 px; login hero up to 88 px; card titles 17–19 px; dialog title 26 px.
+- **Kicker** above page titles: 12 px, uppercase, tracking 0.1em, bold, `accent-700`.
+- **Space** (1.10× density): 4.4 / 8.8 / 13.2 / 17.6 / 26.4 / 35.2 px (`space-1,2,3,4,6,8`). The prototype mostly uses literal px (card padding 22–26, page padding 40/44, gaps 18/22/26) — round to the scale where it does not change the look.
+- **Radius:** sm 8, md 16, lg 28; cards and dialogs `lg × 1.15 ≈ 32 px`; sidebar 32; buttons/inputs/tags/pills 999.
+- **Shadow:** sm `0 1px 2px`, md `0 3px 10px`, lg `0 12px 32px` of `neutral-900` @ 14/16/22 %. Dark: black @ 40/45/55 %.
+- **Theme:** `data-theme="light|dark"`, persisted in `localStorage['hh-theme']`, default light (the prototype ignores `prefers-color-scheme` — F2 may default to the system setting). `color-scheme: dark` in dark. Dark overrides: primary-button hover = `accent-400`; dialog backdrop black @ 55 %.
+
+## 3. App shell and routes
+
+Two-column layout, full viewport height: **sidebar** 240 px (floating `surface` panel, radius 32, 14 px outer margin) + scrolling `main` (padding 40/44).
+
+Sidebar (top → bottom): logo (the notebook icon, the same for everybody - see §8 - + "*First name*'s Habits" in two lines; since 2026-10-09 the service carries the first name of whoever signed in last on this browser, "Hans' Habits" for a name ending in s, "Hanna" until anybody did) → nav pills **Today** (sun), **Habits** (list-checks), **Calendar** (calendar), **Resolutions** (target) — active = `accent` fill + `bg` text → *(spacer)* → light/dark segmented switch (sun / moon) → user card (initial avatar, **first name**, **email**, log-out icon button).
+
+| Route | Screen | Nav item |
+|---|---|---|
+| `/login` (login + register as one screen with a mode toggle) | Auth | — |
+| `/diary/:date` (`yyyy-MM-dd`); `/` redirects to today's date | Today / Daily diary | Today |
+| `/habits` | Habit month tracker | Habits |
+| `/calendar` | Year calendar | Calendar |
+| `/resolutions` | Year resolutions | Resolutions |
+
+"Today" always jumps to the real today, also from a past diary day. "New habit" is a modal dialog over `/habits`, not a route.
+
+## 4. Screens
+
+All dates are the **client's local date** as `yyyy-MM-dd` (date-fns, never `toISOString()`); "today" is the client's, not the server's.
+
+### 4.1 Auth (login / register)
+
+Split screen: left a hero ("Hanna's Habits", tagline "Daily reflections, habits, and goals in one place.", three tags Daily diary / Habits / Resolutions) over decorative circles (terracotta-200, sage-200, a small sage-500 dot); right a card with the form. Light/dark switch top right.
+- Login: Email, Password, **Log in**, divider "or", **Continue with Google**, link "New here? Create an account".
+- Register adds two optional fields, **First name** and **Last name** (side by side; changed 2026-10-09, they were one "Your name"), and the button reads **Create account**.
+- Needs from the API: `AuthResult` (exists) + **first/last name** (done, B5b; split into two fields on 2026-10-09).
+- Not designed: field validation errors, 401 / 409 / 429 (lockout) messages, loading state, forgot password. Use the same pill inputs with the error text under the field and a form-level message from the ProblemDetails `title`/`detail`.
+
+### 4.2 Today / daily diary (`/diary/:date`)
+
+Header: kicker "Daily diary", `h1` = "Wednesday, 7 October", a **Saved** tag (sage, check icon), prev/next-day icon buttons. Next is disabled on today (no diary for the future).
+
+Cards, in grid order:
+1. **Greeting + Mood** — one card (changed twice on 2026-10-09: the user's wife did not like the page opening with a wide mood card; then greeting and mood were put together). One sentence in Caprasimo, "Hi, *first name*! How are you feeling today?" (on any other day than today "…How were you feeling on this day?"; 20 px, 26 px from a 32 rem card), and in the **same card** just the five faces — **no "Mood" title and no word for the chosen one** (a face's name is its tooltip and its accessible name). Faces: circle buttons (50 px on a wide screen, `clamp(2.25rem, 11vw, 3.125rem)` so that all five fit a 320 px phone) with Lucide faces `laugh`, `smile`, `meh`, `frown`, `annoyed`; selected = filled with the mood colour (`--hh-m*`), others `bg` with `neutral-700` icon. Radio-group semantics (`aria-label="Mood"`). **No clear button** (revised the same day, it had a reserved slot that pushed the faces off the middle): choosing the chosen face once more clears the mood (works with the space bar; the radio group says so to a screen reader, the chosen face's tooltip too). The faces share the card's width (`justify-between`: same room at both ends, so they are centred on a phone) and sit under the sentence; beside it (sentence left, faces right, ending at the card's padding) only where the card is ≥ 48 rem wide — a **container query** (`@3xl`), because the column is only ⅔ of the page and the viewport's width says little.
+2. ~~**Body**~~ — **switched off in the UI (2026-10-09), not removed.** Big percentage (Caprasimo 22 px, sage) + slider 0–100, ends labelled **Drained** / **Energised**. `ScaleCard` is still in `features/diary`; to bring both cards back put them in `DiaryEditor` again.
+3. ~~**Mind**~~ — switched off the same way; accent colour, ends **Foggy** / **Clear**. `body` and `mind` stay in the draft, the `PUT` and the API: a day that has them is saved with them (a test pins this), a new day sends `null`.
+4. **Highlight of the day** — borderless textarea inside the card, placeholder "What made today worth remembering?".
+5. **Grateful for** and **Something I learnt** — two cards, each a list of short lines with a coloured dot (sage / accent-400) and a last ghost row "Add something…" (inline add).
+6. **Today's habits** (sage-200 card, right column) — habits **scheduled on the viewed weekday**: round check (28 px, filled sage when done / sage ring when open), title, flame icon + streak number; header link "N of M →" goes to `/habits`. Click toggles the record for the *viewed* date. (The streak shown is always the current streak as of the real today, not of the viewed day.)
+7. **Tasks** — checklist (rounded-square checkbox 22 px, done = accent fill + strikethrough), counter "N done", input row "Add task and press Enter".
+
+Header on a phone (below `sm`, since 2026-10-09): two rows — kicker "Daily diary" left with the **Saved** tag right, the date left with the previous/next-day buttons right. The same grid serves every screen (`PageHeader`); from `sm` the roomy layout as before.
+
+There is **no save button**: the "Saved" tag implies **autosave** (F6: debounced write, one request in flight, status `saving… / saved / error`).
+
+Data per day (document `PUT`): `mood` (1–5 or none), `body` 0–100, `mind` 0–100, `highlight`, `grateful[]`, `learned[]`, `tasks[{title, done}]`; plus habits-for-date (see §5).
+
+### 4.3 Habits (`/habits`) — month tracker
+
+Header: kicker "Habits", `h1` = "October 2026", primary button **+ New habit**. One card with a horizontally scrolling table (min-width ≈ 1060 px): header row = a column per day (pill with weekday letter + number, today highlighted in accent) and a "Streak" column; each habit = row with title, schedule label ("Every day", "Weekdays", "Weekends", else "Mon · Wed · Fri"), a trash icon button, 22 px circular day cells and a flame icon + streak number (Caprasimo 18 px).
+
+Cell states: **done** (sage-500 fill + check) · **missed** (`--hh-miss` fill: scheduled, past, not done) · **due today** (2.5 px accent ring) · **future scheduled** (1.5 px neutral ring, not clickable) · **not scheduled** (small neutral dot, not clickable). Past and today cells toggle on click. Legend row below: Done / Missed / Due today / Not scheduled.
+
+**New habit dialog:** title field ("What do you want to do?", placeholder "e.g. Stretch for 10 minutes"), seven round weekday toggles **M T W T F S S** (Monday first), preset tags **Every day / Weekdays / Weekends**, buttons Cancel and **Add habit · N×/week** (disabled without a title or without a day). UI index 0..6 = Mon..Sun ↔ API `(i + 1) % 7` (0 = Sunday).
+
+### 4.4 Calendar (`/calendar`) — year overview
+
+Header: kicker "Calendar", `h1` = "2026", legend of the five mood colours. Grid of 12 month cards (min 250 px, `surface`; the current month `neutral-100`): month name (Caprasimo), "N entries" (hidden if 0), a 7-column **Monday-first** grid of 26 px day circles. Day = diary entry → filled with its **mood colour**; past day without entry → 1 px `neutral-300` ring; future day → plain number in `neutral-500`; today → extra accent ring. Click a day → `/diary/:date`. (As built in F7: see the calendar bullets in §8 — an entry without a mood looks different from the proposal, days to come are not links, there is a weekday header and year navigation.)
+
+### 4.5 Resolutions (`/resolutions`)
+
+Header: kicker "Resolutions", `h1` = "My 2026". Left card: numbered rows (44 px circle with the number — sage when kept, accent-200 when open), title (17 px bold), optional link line "Tracked by “<habit>”" (list icon, goes to `/habits`), and on the right a **Kept** tag (sage) or **Mark kept** secondary button (toggle). Last row: dashed-circle "+" and an input "Add a resolution and press Enter". Right card (260 px): a **donut** (conic gradient, accent over neutral-300) with the percentage of the year elapsed, caption "of 2026 is behind you", and "N of M resolutions kept so far — X days left." The percentage and days left are **computed on the client from today's date** (the prototype hard-codes 77 % / 85 days = day 280 of 365). (As built in F8: see the resolutions bullets in §8 — edit, delete and habit picker, year navigation, the wording for past and future years.)
+
+## 5. What the design needs from the API
+
+Legend: **exists** · **change** (exists, needs a change) · **new**.
+
+| Need (screen) | Status | Where |
+|---|---|---|
+| Register/login/Google/refresh/revoke, `AuthResult { user, tokens }` | exists | B5 |
+| **First and last name** (register fields, sidebar, greeting, "Hanna's Habits"): `firstName` / `lastName` on `RegisterCommand` (both optional), from the Google `given_name` / `family_name` claims, in `AuthResult.user` (`{ id, userName, email, firstName, lastName }`; `firstName` is never empty - falls back to the email's local part -, `lastName` is `null` when none). Was one `displayName` until 2026-10-09; the migration `SplitDisplayName` splits an old name at its first word | done | **B5b** (split: PROGRESS 2026-10-09) |
+| Habits CRUD, `schedule: number[]` (0 = Sunday), mark/unmark `PUT/DELETE …/records/{date}` | exists | B2/B4 |
+| Habits **overview** in one call for the month grid and the Today panel: `GET /api/habits/overview?from=&to=&asOf=` → `[{ id, title, schedule, startDate, completedDates[], currentStreak }]`. Grid: `from/to` = month; Today panel: `from = to = viewed date` (client filters by schedule). One query instead of 1 + N requests; streak must be server-side because it can span months. `from`/`to` required, `asOf` optional (default = server UTC date). | done | **B8** |
+| **Current streak** (pure domain logic): walk back from `asOf` over *scheduled* days only; unscheduled days neither count nor break; `asOf` itself counts if done and is ignored (not a break) if still open; the first earlier scheduled day that is not done ends the streak; stop at `startDate`. Records after `asOf` and on unscheduled days are ignored. | done | **B8** |
+| **Habit `startDate`** (`DateOnly`): the prototype draws every scheduled past day of a *new* habit as "missed". Cells before `startDate` must render as not-applicable, and streak/stats must stop there. `EntityBase.CreatedAt` is a UTC timestamp and can be off by a day in the user's local date, so use an explicit date (client sends it, default = server UTC date; optional on create; range 2000-01-01..2100-12-31; not editable yet). | done | **B8** |
+| Daily diary as one document per user+date: `GET/PUT/DELETE /api/daily-diaries/{date}`; fields `mood` (1–5, nullable), `body`/`mind` (0–100, nullable), `highlight` (nullable), `grateful[]`, `learned[]`, `tasks[{title, done}]`. Replaces `Text` (required) — an entry may now consist of just a mood. | done | **B6** |
+| Calendar range query `GET /api/daily-diaries?from=&to=` → `[{ date, mood }]` (slim: the colour needs the mood, not the whole entry) | done | **B6** |
+| Resolutions per year; each item: `title`, `kept`, optional **habit link** (`habitId` + resolved title); stable order; `GET /api/resolutions/{year}` answers 200 with an empty list for a year without items (`[{ id, title, kept, habitId, habitTitle }]`; add/update/delete under `/api/resolutions/{year}/items[/{id}]`) | done | **B7** |
+| Year progress donut / days left | — | client only |
+
+Mood mapping (UI ↔ API ↔ domain `Mood`): Great = 5 `Excellent` · Good = 4 `Good` · Okay = 3 `Ok` · Low = 2 `Bad` · Rough = 1 `Terrible`. The API carries the number (higher = better); labels are UI wording. Prototype index 0 = Great.
+
+## 6. Component inventory (input for F2 / feature folders)
+
+`shared/ui`: `Button` (primary / secondary / ghost / icon / block), `Tag` (accent / accent-2 / neutral / outline), `Card`, `Field` + `Input` (pill) + `Textarea`, `Dialog` (backdrop + panel + title/body/actions), `PageHeader` (kicker + h1 + actions), `ThemeSwitch` (segmented sun/moon), `Slider` (native `<input type="range">` styled as the pill track with the ringed thumb), `ProgressDonut`, `Toast` (not designed, needed), `Spinner`/skeleton (not designed, needed).
+Feature-level: `Sidebar` + `NavItem` + `UserCard`, `MoodPicker`, `ChipList` (dot list with inline add), `TaskList`, `HabitCheck` (28 px round toggle), `StreakBadge` (flame + number), `HabitGrid` + `HabitRow` + `DayCell`, `WeekdayToggle` (+ presets), `MonthCard` + `DayDot`, `ResolutionRow`, `SavedIndicator`.
+
+## 7. Decisions made in M1
+
+- **`Priority` (Normal/High) is dropped** — the design has no priority anywhere; it is not ported and disappears with the legacy projects (B10).
+- **`YearResolution.Summary` is not ported** — no place for it in the design (YAGNI); it can be added later with the screen that shows it.
+- **Streak is required**, so **B8 is no longer optional** and F5/F6 depend on it (see ROADMAP).
+- **Diary is autosave-by-date** (no save button, no ids in the frontend): the document is addressed by date; full-document `PUT`.
+- Legacy icon set (`src/assets/icons/*`, `Beleriand.ttf`) is replaced by Lucide + Caprasimo/Figtree.
+
+## 8. Gaps and deviations (decide or fix while implementing)
+
+Not designed in the prototype — needed anyway:
+- **Month navigation** on Habits and **year navigation** on Calendar (headers are static text).
+- **Edit habit** (only the create dialog exists; the same dialog can serve, F5), delete confirmation, a **description** field (the API has one, max 500; the dialog has none — keep optional or drop from the UI), the 150-char title limit.
+- Edit/delete for tasks, grateful/learned items and resolutions; a **habit picker** to link a resolution to a habit (only pre-linked seed data is shown).
+- Loading / empty / error states, toasts, autosave failure, offline. **Decided in F9:** loading = grey `Skeleton` blocks in the shape of the content (announced once as a status; `bg-text/10`, so they follow the theme), error = message + "Try again" in the card, a crashing screen = an error page inside the shell, the server not reachable on page load = a page of its own ("You are still signed in", retry, retries by itself when the browser is back online), a missing `VITE_API_URL` = a start-up error page. None of these is in the mockup; their colours are the existing tokens.
+- An entry with **no mood** (calendar colour): the prototype always has one. Proposal: filled `neutral-200` with `neutral-800` number.
+- **Responsive/mobile (decided in F9, not looked at in a browser).** From `lg` (1024 px) up nothing changed. Below it the sidebar is **one element with other classes**: a slim bar on top (logo circle - the name stays for screen readers -, theme switch, log-out button; the name/email card is desktop only) and the four screens as a **bottom navigation** fixed to the screen (icon over label; the current one is `accent-200` / `accent-800`, not the sidebar's `accent` / `bg`, because that pair is 3.0 : 1 and the labels are 12 px). `main` gets `pb-28` below `lg` for the bar; page titles are 32 px below `sm`; header buttons wrap. The habit grid still scrolls sideways (min-width 66 rem) with the habit names sticky; their column is 11 rem wide on phones instead of 16 rem. Diary, resolutions and login already stacked below `lg`; the calendar is an auto-fill grid. A drawer was considered and not built: the bottom bar needs no open/close state and keeps the four screens one thumb away. **Revised 2026-10-09 for a 375 × 667 phone ("everything too big"):** the top bar is 48 px instead of 68 (logo circle 32 px, **the service's name "Hanna's Habits" beside it** - now visible on phones, truncated if long -, 28 px theme buttons, log-out), the bottom bar's tabs 48 px instead of 56 (`main` gets `pb-24`), `Card` padding 16 px instead of 24 (below `sm`; a `p-*` passed to a card only wins when it is *larger* - the stylesheet lists them ascending - which is why the login card says `p-6 sm:p-8` and the calendar's dead `p-5` is gone), gaps 16 px, page titles 22 px, round icon buttons 36 px. The habit grid **opens scrolled to today** (centred in the room the names leave), the names column is 8 rem on phones with the edit/delete buttons under the name, "New habit" is just a plus in the header. **Then the real cause of the broken habits screen (2026-10-09, third pass):** `sr-only` is `position: absolute`, and without a positioned ancestor its containing block is the whole page, so a scroll container neither clips nor scrolls it. The 31 `sr-only` day names in the grid header, far to the right, made the *page* about 1050 px wide: empty space right and below, and the `fixed` bottom bar stretched to the wider page. Fix: `main` and the grid's scroller are `relative` (tests pin the class). Anything `sr-only` inside `main` is covered by this. The theme switch in the sidebar is stretched by the column — its two halves now share the width instead of two small circles sitting at the left of a long pill.
+- **The service is named after the person (2026-10-09).** "Hanna's Habits" until somebody has registered or signed in on a browser; from then on "*First name*'s Habits" everywhere - sidebar/top bar, login page (also **after a log-out**), tab title, tab icon, start-up error page. Kept in `localStorage` under `hh-brand-name` (`shared/lib/brand.ts`): **only the first name**, written when a session starts, never sent anywhere, **not removed by a log-out** (that is the point), gone with the site's data; if storage is blocked it lasts until the reload. Privacy, plainly: it is personal data on the device, visible to whoever uses that browser next, and a storage entry that is a convenience and not strictly necessary - fine for a private, household app (the user decides about their own browser), but a *public* service in the EU would need to name it in its privacy notice and, under the ePrivacy rules, probably ask first. Not legal advice.
+- **One logo for everybody: a notebook (2026-10-09).** A sage circle (`accent-2`) with a cream notebook, a darker spine, a terracotta bookmark (`accent`) hanging over its top edge and a sage tick on the page - diary and habits in one picture, in the app's own three colours. `src/assets/logo.svg` is the single file: the tab icon (`index.html`) and, as an `<img>`, the logo in the sidebar/top bar (`BrandMark`), so they cannot drift apart. It lives in `src`, not in `public`, so Vite puts a hash into its name: a plain `/favicon.svg` is cached for an hour by nginx and tab icons are cached by browsers even longer - the first notebook was invisible behind the old tick for that reason. It does not follow the theme (a logo keeps its colours). **Not** a monogram of the name: the first idea, the name's initial + "H", is **"HH"** for Hanna's Habits - a code of the neo-Nazi scene ("Heil Hitler"), other pairs carry such meanings too (SS, ...) - and a per-person icon was not what was wanted anyway. Only the *name* in words follows the person.
+- **The top part of a screen stays (2026-10-09).** `PageHeader pinned` is sticky at the very top of `main` (`z-20`, **fully opaque**): the diary's date and day buttons, the calendar's year **with the colour legend** (`below`), the habits' and resolutions' title and buttons. `main` has **no spacing at its top** (only the shell's own 12 px), so the header sits in the same place at rest and while scrolling and never moves; the page passes under it with a hard edge - a soft fade under it and a strip above it were tried the same day and read as "see-through space". `scroll-pt-32` on `main` keeps a focused control from ending up behind it. On a phone the pinned part is 60-130 px of the screen; the calendar's is the tallest.
+- The habit grid always renders 31 day columns; render the real month length.
+- The dark theme is complete for roles and ramps, but check contrast of the mood colours on `surface` in dark.
+- **Contrast (measured in F2):** light theme `bg` text on `accent` (primary button, active nav pill) is **3.0 : 1** (3.8 on the hover colour), `bg` on sage-600 3.5 : 1 — below WCAG AA for normal-size text (4.5), fine only for large text. The design's colours were kept; if it matters, use `accent-700` (≈ 6 : 1) as the button fill or darken `accent` — a design decision for the user. Dark theme and `accent-700` text on `bg`/`surface` pass (5.1–14 : 1).
+
+- **Contrast of the habit cells (measured in F5, against the card `surface`):** light theme — *missed* 1.08 : 1 (practically invisible), *upcoming* ring 1.5 : 1, *done* fill 2.1 : 1, *due-today* ring 2.7 : 1, check icon on *done* 2.4 : 1; all below the 3 : 1 that WCAG 1.4.11 asks of graphics. Dark theme is fine except *missed* (2.2 : 1) — upcoming ring 3.5, done 5.4, due-today 5.1, check icon 6.1. The states are also told apart by shape (filled / ring / dot) and every cell has a text label, so nothing depends on colour alone *except missed vs. open-past*, which differ only by that pale fill. Design colours kept; if it matters, darken `--hh-miss` in the light theme (e.g. `accent-300`/`400`) and use a darker `done` — a design decision for the user.
+
+- **Clear buttons (decided in F6):** the diary can be partly empty — mood, body and mind are nullable, and a day with nothing in it is deleted by the server. The mockup has no way to take a chosen mood or a slider value back (a radio group cannot be un-chosen), so each of the three cards got a small ✕ button next to its value, and an untouched slider rests dimmed at the middle with a dash instead of a number. Without them a day could never become empty again.
+- **Add rows** (grateful / learned / tasks) add on Enter **and when the input loses focus**, and every line can be edited in place and removed (✕ on hover or focus); a line left blank is removed on blur. None of it is in the mockup.
+- **Calendar (decided in F7).**
+  - An entry **without a mood** is not the proposed `neutral-200` fill: that is **1.09 : 1** against the card in the light theme (the card is `surface`, `neutral-200` is hardly lighter) and 1.12 : 1 on the current month's `neutral-100` - invisible. It is the same fill with a **2 px `neutral-500` rim** (2.15 : 1 light, 5.26 : 1 dark) and a `neutral-800` number, and the legend has a sixth item “No mood”. The rim tells it from *Okay* (a plain `neutral-300` fill) and from *no entry* (a 1 px `neutral-300` ring, 1.11 : 1 light - quiet on purpose).
+  - A **day to come** is its number in `neutral-600` instead of `neutral-500` (the number is 2.15 : 1 on the card in the light theme with 500, 3.21 : 1 with 600; dark 7.57), no ring, and **not a link** - the diary's “next day” stops at today too. A day to come that *has* an entry (reachable by address) is shown by what it holds and linked.
+  - Added: a weekday header (M T W T F S S; full names for screen readers), a level-2 heading per month, each month a real `<table>`; year navigation (previous / next / “This year”, `?year=2025` in the address; first year 2000, last year = the current one - there is no diary for the future); the legend sits under the header, not in it; a one-line invitation when the year has no entry yet; the card padding is 22 px so the 2 px today ring does not touch the neighbouring days (26 px discs in ~29 px columns).
+  - **Contrast of the mood colours (measured in F7, against the card `surface`, light theme):** the fills of *Good*, *Okay* and *Low* are **1.09 – 1.13 : 1** - practically the card's own colour, told apart by hue only; *Rough* 2.24, *Great* 3.14. The number on *Rough* is 2.52 : 1 and on *Great* 3.53 : 1 (below 4.5). Dark theme: *Good* 2.35, *Low* 3.38, the rest 5 or more; numbers 3.70 (on *Low*) or better. Every day has a text name (“Thursday 1 October: mood Great”), so nothing depends on colour alone for a screen reader - but a sighted person in the light theme sees three washed-out hues. Design colours kept; if it matters, darken the light-theme `mood-good` / `mood-okay` / `mood-low` (e.g. `accent-2-400` / `neutral-400` / `accent-400`) - a design decision for the user.
+- **Resolutions (decided in F8).**
+  - Not in the mockup, needed anyway: a **pencil** and a **bin** icon button per row (as in the habits grid), an **edit dialog** (title + an optional **habit select**, “No habit” first) and a delete confirmation (“The habit it points to stays.”). A resolution is linked to a habit **only in the edit dialog** — the inline add row has no place for it. A failed habit list shows its message and “Try again”; the rest of the form still works.
+  - The **add row** is a real form: Enter or the dashed plus (a submit button, disabled while the line is blank) adds; **leaving the input does not** — unlike the diary this is not an autosaved document, nothing may be created behind the person's back. A refusal (“at most 50 a year”) appears under the row and the text stays; at 50 the row is replaced by a sentence.
+  - **Kept** is a button that takes it back (the mockup's tag is read-only); “Mark kept” and “Kept” carry the item's title in screen-reader-only text.
+  - The **number circle** of a kept item is **sage-700**, not `accent-2`: the `bg`-coloured number on `accent-2` is **3.14 : 1** in the light theme (below WCAG's 4.5 for text of this size), on sage-700 **5.43 : 1** (dark theme 11.8 : 1). The circle against the card is 4.82 : 1 light / 10.4 : 1 dark. The open number (accent-800 on accent-200) is 8.37 : 1, the “Kept” tag (sage-800 on sage-200) 8.11 : 1.
+  - **Year navigation** (previous / next / “This year”, `?year=2027`): 2000–2100, the server's bounds. Unlike the calendar it may look ahead — next year's resolutions are made in advance. The card's wording: current year “of 2026 is behind you” with “N of M resolutions kept so far — X days left.” (**today counts as behind**: day 280 of 365 = 77 % / 85 left, the mockup's numbers; “this is the last day” at 0 left); a past year is 100 % and drops “so far” and the days; a year to come is 0 % and says “2027 has not begun yet”.
+  - Not designed, decided: an empty year shows a one-line invitation above the add row; the list is asked for again every time the screen opens, because each item carries the title of its habit.
+- The habits card is titled **“Today’s habits”** on today and **“Habits of the day”** on any other day; the diary header has no “Today” button (the sidebar's Today does that).
+
+Prototype shortcuts not to copy:
+- Interactive `div`/`span` with `onClick` everywhere → real `button`s / `role="radio"` / `role="checkbox"` / `<input type="range">` with labels and keyboard support (the old UI had clickable `<img>`s — F9 lists this too).
+- Inline styles and hard-coded demo data, `localStorage` only for the theme, "carry" streak offset (demo seed), fake login that accepts anything.
+- The habit streak and the Today panel's "N of M" are computed in the prototype from local state; in the app they come from the overview query.
+
+## 9. Known limitation worth stating
+
+The schedule has no history: if a habit's schedule is edited, past cells are re-judged with the *new* schedule (missed/not-scheduled and the streak change retroactively; records on days that are no longer scheduled are kept but hidden and not counted). Modelling schedule versions would be over-engineering for this app; revisit only if it annoys in practice.
