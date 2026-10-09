@@ -550,3 +550,11 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 **Verified:** typecheck, lint (0), format, 936 tests, build green; `dist/index.html` links `/assets/logo-BI7siWW2.svg`. **Not verified:** in a browser. If the old icon is still there after the container swap, it is the browser's own favicon cache (Chrome keeps it per site): closing the tab and reopening, or clearing the site's data, replaces it.
 - **Found while checking the headers:** the hashed files in `/assets/` did not get the intended `immutable, 1 year` but the one hour of the rule for other files with an extension: in nginx a regex location (`~ \.[A-Za-z0-9]+$`) beats a plain prefix location (`/assets/`). `location ^~ /assets/` fixes it (F9's note "cache it for good" was right in intent, wrong in effect; harmless for correctness because the names carry a hash, a waste of requests). Checked on the running container: JS and logo `max-age=31536000, immutable`, `index.html` `no-cache`, `/nope.js` and `/assets/missing.js` 404, a deep link 200.
 
+## 2026-10-09 (7) — "A bit of see-through space at the top while scrolling" (frontend)
+
+**Done** (frontend `dev`, one local commit). The report was vague about *where*; two things of mine could be read as see-through space, both gone:
+- **The fade** under the pinned header (a 16 px gradient from the page colour to transparent, meant to soften the edge): content shone through it. Removed - the header is fully opaque, the page passes under it with a hard edge.
+- **The strip above the title:** `main` still had 0.5rem of top spacing that the header carried. Now `main` has none: the header sits at the very top, at rest and while scrolling. The whole `--page-top` mechanism (variable, negative margin, matching padding) was deleted - with a value of 0 it would only have been indirection.
+
+**Verified:** typecheck, lint (0), 936 tests, build green. **Not verified:** in a browser, and I could not work out from the code alone that these two were *the* cause (sticky stuck at `top: 0` should be flush either way). If something is still see-through, the useful facts are *where* (above the title, under the header, at its left/right sides), on which screen and at what width.
+
