@@ -15,7 +15,7 @@ namespace HannasHabits.Integration.Tests.Identity;
 [Collection(IntegrationCollection.Name)]
 public class IdentityServiceTests : IAsyncLifetime
 {
-    private const string Password = "Passw0rd!-test";
+    private static readonly string Password = TestUser.Password;
 
     private readonly TestEnvironment _environment;
     private ServiceProvider _provider = null!;
@@ -47,8 +47,9 @@ public class IdentityServiceTests : IAsyncLifetime
 
     private static string NewEmail() => $"identity-{Guid.NewGuid():N}@example.com";
 
-    private Task<IdentityUserDto> Register(string email, string password = Password, string? firstName = null, string? lastName = null)
-        => InScope(identity => identity.RegisterAsync(email, password, firstName, lastName));
+    // A default parameter has to be a compile-time constant, so "no password given" (null) stands for the shared test password.
+    private Task<IdentityUserDto> Register(string email, string? password = null, string? firstName = null, string? lastName = null)
+        => InScope(identity => identity.RegisterAsync(email, password ?? Password, firstName, lastName));
 
     private Task<IdentityUserDto> Authenticate(string email, string password) => InScope(identity => identity.AuthenticateAsync(email, password));
 

@@ -10,7 +10,9 @@ namespace HannasHabits.Integration.Tests.Support;
 /// </summary>
 public sealed class TestUser
 {
-    public const string Password = "Passw0rd!-test";
+    // Made up anew for every test run: no password is written down in the code, and it still meets the password rules
+    // (upper and lower case, a digit and a symbol are in the fixed start, the rest is random).
+    public static readonly string Password = "Tt1!" + Guid.NewGuid().ToString("N");
 
     private TestUser(ApiClient client, string email, Guid id, string accessToken, string refreshToken)
     {
