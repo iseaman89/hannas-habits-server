@@ -526,3 +526,12 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 
 **Verified:** typecheck, lint (0), format, build green; 916 tests; the new classes are in the generated CSS. **Not verified:** all of it in a browser (user's rule) — in particular the sr-only explanation: it fits all three symptoms (right gap, bottom gap, stretched bar) but nobody has measured `document.scrollWidth` on the habits screen.
 
+## 2026-10-09 (4) — The service named after the person, one-letter logo, pinned screen tops (frontend)
+
+**Done** (frontend `dev`, one local commit; backend untouched):
+- **Name of the service.** `shared/lib/brand.ts`: a tiny store (`localStorage` key `hh-brand-name`, `useSyncExternalStore`, hears other tabs, memory fallback when storage is blocked). `AuthProvider` writes the first name of whoever signs in (register, login, Google, refresh). Default "Hanna". Used by: sidebar/top bar (live from the session's user), login page heading, tab title (`documentTitle` no longer has a constant `APP_NAME`), tab icon, start-up error kicker. After a log-out the login page still says "Yevgen's Habits". What is stored, who can see it and the EU-privacy angle: DESIGN.md §8 (answered the user's "can we, may we").
+- **Logo.** The user's idea (initial + "H") would be "HH" for Hanna's Habits - a neo-Nazi code ("Heil Hitler") -, so: **one letter only, the first letter of the first name** (`brandInitial`; `ß` → "S" not "SS"; no letter → the tick). `BrandMark` (sage circle, display font) in the sidebar and top bar; `brandIconSvg`/`useBrandIcon` swap the tab's `<link rel="icon">` for the same circle as a data-URL SVG (system font: web fonts do not reach an image). Tests pin "one letter, never HH".
+- **Pinned tops.** `PageHeader` got `pinned` (sticky, `z-20`, opaque, fade) and `below` (rides along: the calendar's colour legend). Pinned on the diary, habits, calendar and resolutions. The shell's top spacing became the variable `--page-top`, taken over by the pinned header so nothing jumps; `scroll-pt-32` on `main`.
+
+**Verified:** typecheck, lint (0), format, build green; 955 tests (+39); the generated CSS has the `--page-top` utilities, `sticky`, the `after:` fade. **Not verified:** in a browser (user's rule) - the tab icon (a data-URL SVG `<link rel=icon>` is supported by Chrome and Firefox; I have not checked every Safari), how tall the pinned calendar top is on a 375 × 667 phone, whether the fade reads well in dark mode.
+
