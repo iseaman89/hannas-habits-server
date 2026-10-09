@@ -541,3 +541,11 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 
 **Verified:** typecheck, lint (0), format, build green (dist has the new file), 936 tests; the SVG parses and every shape lies well inside the circle (checked by computing distances from the centre). **Not verified:** how it *looks* - at 16 px in a tab, in the 32/44 px logo, on the dark theme (the circle is the same sage on a dark surface). Nobody has seen it; the proportions (notebook 28 × 36, tick stroke 4.4) are a first guess.
 
+## 2026-10-09 (6) — The old tick icon still showed; pinned tops higher (frontend)
+
+**Done** (frontend `dev`, one local commit):
+- **Old tick in the tab:** the container already served the notebook (`curl` showed it), but `/favicon.svg` has no hash in its name and nginx answers non-hashed files with `Cache-Control: max-age=3600`; browsers also keep tab icons in a cache of their own. Fix: the logo moved to `src/assets/logo.svg` and `index.html` links it from there, so Vite emits `assets/logo-<hash>.svg` (immutable cache) and the page names the new file at once (`index.html` is `no-cache`). `BrandMark` imports the same file. `public/` is gone (it only held the favicon).
+- **Pinned tops "went down":** `main` had 2.25rem of top spacing on a wide screen, and the pinned header carried it (by design, so it would not jump) - an empty band of ~36 px (+12 px of the shell's padding) above the title, also while stuck. `--page-top` is now 0.5rem on every size: the top part sits at the top at rest and while scrolling, and never moves.
+
+**Verified:** typecheck, lint (0), format, 936 tests, build green; `dist/index.html` links `/assets/logo-BI7siWW2.svg`. **Not verified:** in a browser. If the old icon is still there after the container swap, it is the browser's own favicon cache (Chrome keeps it per site): closing the tab and reopening, or clearing the site's data, replaces it.
+
