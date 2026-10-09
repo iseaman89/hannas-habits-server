@@ -558,3 +558,18 @@ Short, dated entries: what was done, key decisions (and why), what was touched. 
 
 **Verified:** typecheck, lint (0), 936 tests, build green. **Not verified:** in a browser, and I could not work out from the code alone that these two were *the* cause (sticky stuck at `top: 0` should be flush either way). If something is still see-through, the useful facts are *where* (above the title, under the header, at its left/right sides), on which screen and at what width.
 
+
+## 2026-10-09 (8) — Security findings on the dev → main pull request (backend)
+
+**Looked at:** PR #1 (`dev` → `main`, closed, not merged) showed three GitGuardian findings, and `dotnet list package --vulnerable --include-transitive` reported SSH.NET.
+- **SSH.NET 2025.1.0** (two High advisories, GHSA-q939-rpr3-3284 and GHSA-mggc-4xg6-vcxf, both in `ScpClient`): transitive via `Testcontainers.PostgreSql` 4.13.0, test project only, and the tests never use SCP. Fixed by `Testcontainers.PostgreSql` 4.13.0 → 4.16.0, which pulls SSH.NET 2026.0.0. The scan is clean in all projects now.
+- **GitGuardian "Generic password" ×3** (`docker-compose.yml` @ 41c8de2; `TestUser.cs` and `IdentityServiceTests.cs` @ cdc38c9): false positives. The compose file only references `${POSTGRES_PASSWORD}`; the others are throw-away passwords of the tests. A code change cannot clear them, because GitGuardian scans every commit of a PR - they have to be dismissed as "false positive" in the GitGuardian dashboard. No `.gitguardian.yaml` added: its docs do not say that the PR check honours it.
+- **History scan** (both repos: private keys, cloud/GitHub/OpenAI-style tokens, JWTs, Google secrets, connection strings with literal passwords): the only real hit is the Google OAuth client secret (legacy `UserService/appsettings.json`, also on `origin/main`; `client_secret_*.json` in the frontend). It is the same secret in both (compared by hash) and was rotated and deleted on 2026-10-08 (B0), so it is inert. History is not rewritten for it.
+
+**Verified:** Release build 0 warnings; 792 tests green (Domain 160, Application 192, Architecture 28, Integration 412).
+
+## 2026-10-09 (9) — New README and screenshots for the overview repo (hannas-habits)
+
+**Done** (a local clone of `iseaman89/hannas-habits`, branch `dev`, one commit, **not pushed**): the README now describes the current app and has a "How it was built" section that says openly that most of the code was written with Claude Code, plus a "What's not there" list taken from the roadmap's accepted limits. The Portfolio link is left out: the user removed it from the frontend README right after merging that PR. New screenshots (5 desktop, 3 phone) replace the old ones.
+- **Screenshots** show demo data only (a made-up user and diary). They came from an isolated Compose project on its own ports and a throw-away database, driven with headless Chrome; it was torn down afterwards. Ports 5173/5174 belong to another project of the user, so 5291 was used.
+- **Not verified / to check by the user:** the sentences about the user's own part (first version written alone, who decided what, "I check what comes out", "What I practised") are inferred from `CLAUDE.md` and the docs. The Google button in the login shot is German, because Google picks its language itself. The README links to `docs/` on `main`: they work only after this repo's `dev` is merged into `main` (the backend PR #1 is closed, `main` has no `docs/` yet).
