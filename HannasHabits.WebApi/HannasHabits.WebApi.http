@@ -65,7 +65,6 @@ Content-Type: application/json
 #   monthlyOnWeekday  occurrence (first | second | third | fourth | last) + weekday
 #   monthlyOnDate     dayOfMonth (1..31; a month without that date uses its last day)
 # anchor = the day the rhythm counts from (every N weeks with N > 1, every N days); omitted = the start date.
-# schedule is deprecated: weekdays only, every week; ignored when recurrence is sent.
 # startDate = first day the habit applies (yyyy-MM-dd, your local date; 2000-01-01 .. 2100-12-31); omit it for "today".
 POST {{host}}/api/habits
 Authorization: Bearer {{accessToken}}

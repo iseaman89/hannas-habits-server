@@ -6,10 +6,13 @@ namespace HannasHabits.Integration.Tests.Support;
 public static class ApiExtensions
 {
     public static async Task<Guid> CreateHabitAsync(
-        this TestUser user, string title = "Read", int[]? schedule = null, string? startDate = null, string? description = null,
+        this TestUser user, string title = "Read", int[]? weekdays = null, string? startDate = null, string? description = null,
         object? recurrence = null)
     {
-        var response = await user.Client.PostAsync("/api/habits", new { title, description, schedule, startDate, recurrence });
+        // `weekdays` is the shorthand for a weekly rule on those days; an explicit `recurrence` wins.
+        recurrence ??= weekdays is null ? null : new { kind = "weekly", weekdays };
+
+        var response = await user.Client.PostAsync("/api/habits", new { title, description, startDate, recurrence });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();

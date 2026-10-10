@@ -54,8 +54,7 @@ internal sealed class FakeHabitQueries : IHabitQueries
         AskedForUsers.Add(userId);
         return Task.FromResult(_repository.Habits
             .Where(h => h.UserId == userId)
-            .Select(h => new HabitListItemDto(
-                h.Id, h.Title.Value, h.Description, h.Schedule.Days, RecurrenceDto.From(h.Schedule)))
+            .Select(h => new HabitListItemDto(h.Id, h.Title.Value, h.Description, RecurrenceDto.From(h.Schedule)))
             .ToList());
     }
 
@@ -77,8 +76,8 @@ internal sealed class FakeHabitQueries : IHabitQueries
         return Task.FromResult(habit is null
             ? null
             : new HabitDetailsDto(
-                habit.Id, habit.Title.Value, habit.Description, habit.Schedule.Days, RecurrenceDto.From(habit.Schedule),
-                habit.StartDate, habit.CreatedAt));
+                habit.Id, habit.Title.Value, habit.Description, RecurrenceDto.From(habit.Schedule), habit.StartDate,
+                habit.CreatedAt));
     }
 
     public Task<List<HabitRecordDto>?> GetRecordsAsync(

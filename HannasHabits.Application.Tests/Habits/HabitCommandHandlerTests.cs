@@ -37,23 +37,28 @@ public class CreateHabitCommandHandlerTests
     }
 
     [Fact]
-    public async Task WithoutASchedule_TheHabitIsPlannedEveryDay()
+    public async Task WithoutARecurrence_TheHabitIsDueEveryDay()
     {
         var dto = await Handle(new CreateHabitCommand { Title = "Read" });
 
-        Assert.Equal(HabitSchedule.Daily.Days, dto.Schedule);
+        Assert.Equal(ScheduleKind.Weekly, dto.Recurrence.Kind);
+        Assert.Equal(HabitSchedule.Daily.Days, dto.Recurrence.Weekdays);
         Assert.Equal(HabitSchedule.Daily, Assert.Single(_habits.Habits).Schedule);
     }
 
     [Fact]
-    public async Task WithASchedule_TheDaysAreReturnedInWeekOrder()
+    public async Task AWeeklyRecurrence_ReturnsTheDaysInWeekOrder()
     {
         var dto = await Handle(new CreateHabitCommand
         {
-            Title = "Run", Schedule = [DayOfWeek.Friday, DayOfWeek.Monday, DayOfWeek.Friday]
+            Title = "Run",
+            Recurrence = new RecurrenceInput
+            {
+                Kind = ScheduleKind.Weekly, Weekdays = [DayOfWeek.Friday, DayOfWeek.Monday, DayOfWeek.Friday]
+            }
         });
 
-        Assert.Equal([DayOfWeek.Monday, DayOfWeek.Friday], dto.Schedule);
+        Assert.Equal([DayOfWeek.Monday, DayOfWeek.Friday], dto.Recurrence.Weekdays);
     }
 
     [Fact]
@@ -71,20 +76,6 @@ public class CreateHabitCommandHandlerTests
         Assert.Equal(WeekdayOccurrence.Last, dto.Recurrence.Occurrence);
         Assert.Equal(DayOfWeek.Saturday, dto.Recurrence.Weekday);
         Assert.Empty(dto.Recurrence.Weekdays);
-        Assert.Equal([DayOfWeek.Saturday], dto.Schedule); // the deprecated list: the weekdays the rule can fall on
-    }
-
-    [Fact]
-    public async Task ARecurrenceWins_WhenTheDeprecatedScheduleIsSentToo()
-    {
-        await Handle(new CreateHabitCommand
-        {
-            Title = "Read",
-            Schedule = [DayOfWeek.Monday],
-            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 }
-        });
-
-        Assert.Equal(HabitSchedule.MonthlyOnDate(15), Assert.Single(_habits.Habits).Schedule);
     }
 
     [Fact]
@@ -152,7 +143,10 @@ public class CreateHabitCommandHandlerTests
     {
         // The validator normally answers first; the Domain still guards every one of these on its own.
         await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand { Title = "  " }));
-        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand { Title = "Read", Schedule = [] }));
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
+        {
+            Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.Weekly, Weekdays = [] }
+        }));
         await Assert.ThrowsAsync<DomainException>(() => Handle(
             new CreateHabitCommand { Title = "Read", StartDate = new DateOnly(1999, 12, 31) }));
         await Assert.ThrowsAsync<DomainException>(() => Handle(
@@ -180,6 +174,9 @@ public class UpdateHabitCommandHandlerTests
     private Task Handle(UpdateHabitCommand command)
         => new UpdateHabitCommandHandler(_habits, _unitOfWork, _user).Handle(command, CancellationToken.None);
 
+    private static RecurrenceInput Weekly(params DayOfWeek[] days)
+        => new() { Kind = ScheduleKind.Weekly, Weekdays = days.ToList() };
+
     [Fact]
     public async Task ReplacesTitleDescriptionAndSchedule_ButNotTheStartDate()
     {
@@ -188,7 +185,7 @@ public class UpdateHabitCommandHandlerTests
 
         await Handle(new UpdateHabitCommand
         {
-            Id = habit.Id, Title = " Run ", Description = "new", Schedule = [DayOfWeek.Saturday, DayOfWeek.Sunday]
+            Id = habit.Id, Title = " Run ", Description = "new", Recurrence = Weekly(DayOfWeek.Saturday, DayOfWeek.Sunday)
         });
 
         Assert.Equal("Run", habit.Title.Value);
@@ -206,7 +203,7 @@ public class UpdateHabitCommandHandlerTests
 
         await Handle(new UpdateHabitCommand
         {
-            Id = habit.Id, Title = "Read", Schedule = [DayOfWeek.Monday], StartDate = new DateOnly(2026, 8, 15)
+            Id = habit.Id, Title = "Read", Recurrence = Weekly(DayOfWeek.Monday), StartDate = new DateOnly(2026, 8, 15)
         });
 
         Assert.Equal(new DateOnly(2026, 8, 15), habit.StartDate);
@@ -277,24 +274,7 @@ public class UpdateHabitCommandHandlerTests
     }
 
     [Fact]
-    public async Task ARecurrenceWins_WhenTheDeprecatedScheduleIsSentToo()
-    {
-        var habit = Make.NewHabit(_user.UserId, "Read");
-        _habits.Habits.Add(habit);
-
-        await Handle(new UpdateHabitCommand
-        {
-            Id = habit.Id,
-            Title = "Read",
-            Schedule = [DayOfWeek.Monday],
-            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 }
-        });
-
-        Assert.Equal(HabitSchedule.MonthlyOnDate(15), habit.Schedule);
-    }
-
-    [Fact]
-    public async Task WithNeitherARecurrenceNorAScheduleThereIsNoRule_AndNothingChanges()
+    public async Task WithoutARecurrenceThereIsNoRule_AndNothingChanges()
     {
         var habit = Make.NewHabit(_user.UserId, "Read", schedule: HabitSchedule.MonthlyOnDate(15));
         _habits.Habits.Add(habit);
@@ -311,7 +291,7 @@ public class UpdateHabitCommandHandlerTests
     public async Task AnUnknownHabit_IsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => Handle(
-            new UpdateHabitCommand { Id = Guid.NewGuid(), Title = "Run", Schedule = [DayOfWeek.Monday] }));
+            new UpdateHabitCommand { Id = Guid.NewGuid(), Title = "Run", Recurrence = Weekly(DayOfWeek.Monday) }));
 
         Assert.Equal(0, _unitOfWork.SaveCount);
     }
@@ -323,7 +303,7 @@ public class UpdateHabitCommandHandlerTests
         _habits.Habits.Add(foreign);
 
         await Assert.ThrowsAsync<NotFoundException>(() => Handle(
-            new UpdateHabitCommand { Id = foreign.Id, Title = "Hacked", Schedule = [DayOfWeek.Monday] }));
+            new UpdateHabitCommand { Id = foreign.Id, Title = "Hacked", Recurrence = Weekly(DayOfWeek.Monday) }));
 
         Assert.Equal("Read", foreign.Title.Value);
         Assert.Equal(0, _unitOfWork.SaveCount);
@@ -337,7 +317,7 @@ public class UpdateHabitCommandHandlerTests
 
         await Assert.ThrowsAsync<DomainException>(() => Handle(new UpdateHabitCommand
         {
-            Id = habit.Id, Title = "Run", Description = new string('a', 501), Schedule = [DayOfWeek.Monday]
+            Id = habit.Id, Title = "Run", Description = new string('a', 501), Recurrence = Weekly(DayOfWeek.Monday)
         }));
 
         Assert.Equal("Read", habit.Title.Value);

@@ -44,7 +44,9 @@ public class QueryTests : IAsyncLifetime
         var habit = Assert.Single(habits);
         Assert.Equal(mine, habit.Id);
         Assert.Equal("Read", habit.Title);
-        Assert.Equal([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday], habit.Schedule);
+        Assert.Equal(
+            [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday],
+            habit.Recurrence.Weekdays);
     }
 
     [Fact]

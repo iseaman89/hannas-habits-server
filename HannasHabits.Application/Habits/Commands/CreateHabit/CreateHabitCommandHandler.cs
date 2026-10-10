@@ -31,8 +31,7 @@ public class CreateHabitCommandHandler : IRequestHandler<CreateHabitCommand, Cre
         var startDate = request.StartDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
         // A rule that counts from a day, sent without one, counts from the day the habit starts.
-        var schedule = request.Recurrence?.ToSchedule(startDate)
-                       ?? (request.Schedule is null ? null : HabitSchedule.Weekly(request.Schedule));
+        var schedule = request.Recurrence?.ToSchedule(startDate);
 
         var habit = Habit.Create(
             _currentUser.UserId, HabitTitle.Create(request.Title), startDate, request.Description, schedule);

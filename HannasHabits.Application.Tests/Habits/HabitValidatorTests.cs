@@ -90,27 +90,15 @@ public class CreateHabitCommandValidatorTests
     }
 
     [Fact]
-    public void NoScheduleMeansEveryDay_ButAnExplicitlyEmptyOneIsAMistake()
+    public void ARecurrence_IsCheckedWhereverItIsSent_UnderItsOwnKey()
     {
         var command = Valid();
 
-        command.Schedule = null;
-        _validator.TestValidate(command).ShouldNotHaveValidationErrorFor(x => x.Schedule);
+        command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 1 };
+        _validator.TestValidate(command).ShouldHaveValidationErrorFor("Recurrence.Interval");
 
-        command.Schedule = [];
-        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Schedule);
-    }
-
-    [Fact]
-    public void AScheduleWithANumberThatIsNoDay_IsRejected_AtThatPosition()
-    {
-        var command = Valid();
-        command.Schedule = [DayOfWeek.Monday, (DayOfWeek)7];
-
-        var result = _validator.TestValidate(command);
-
-        result.ShouldHaveValidationErrorFor("Schedule[1]");
-        result.ShouldNotHaveValidationErrorFor("Schedule[0]");
+        command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 };
+        _validator.TestValidate(command).ShouldNotHaveAnyValidationErrors();
     }
 }
 
@@ -120,7 +108,9 @@ public class UpdateHabitCommandValidatorTests
 
     private static UpdateHabitCommand Valid() => new()
     {
-        Id = Guid.NewGuid(), Title = "Read", Schedule = [DayOfWeek.Monday]
+        Id = Guid.NewGuid(),
+        Title = "Read",
+        Recurrence = new RecurrenceInput { Kind = ScheduleKind.Weekly, Weekdays = [DayOfWeek.Monday] }
     };
 
     [Fact]
@@ -181,36 +171,24 @@ public class UpdateHabitCommandValidatorTests
     }
 
     [Fact]
-    public void TheRule_IsRequired_BecauseAnUpdateReplacesTheWholeHabit_ByRecurrenceOrByTheDeprecatedSchedule()
+    public void TheRule_IsRequired_BecauseAnUpdateReplacesTheWholeHabit()
     {
         var command = Valid();
-
-        command.Schedule = null;
         command.Recurrence = null;
+
         _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Recurrence);
 
-        command.Schedule = [];
-        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Schedule);
-
-        command.Schedule = [(DayOfWeek)(-1)];
-        _validator.TestValidate(command).ShouldHaveValidationErrorFor("Schedule[0]");
-
-        command.Schedule = null;
         command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 };
         _validator.TestValidate(command).ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
-    public void ARecurrence_IsCheckedWhereverItIsSent_AndTheDeprecatedListThenIsNotLookedAt()
+    public void ARecurrence_IsCheckedWhereverItIsSent_UnderItsOwnKey()
     {
         var command = Valid();
-        command.Schedule = [];
         command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 1 };
 
-        var result = _validator.TestValidate(command);
-
-        result.ShouldHaveValidationErrorFor("Recurrence.Interval");
-        result.ShouldNotHaveValidationErrorFor(x => x.Schedule);
+        _validator.TestValidate(command).ShouldHaveValidationErrorFor("Recurrence.Interval");
     }
 }
 

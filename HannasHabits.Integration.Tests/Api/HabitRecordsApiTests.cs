@@ -253,7 +253,7 @@ public class HabitOverviewApiTests
         var item = Assert.Single(overview.EnumerateArray());
         Assert.Equal(habit, item.GetProperty("id").GetGuid());
         Assert.Equal("Read", item.GetProperty("title").GetString());
-        Assert.Equal([1, 2, 3, 4, 5], item.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal([1, 2, 3, 4, 5], item.GetProperty("recurrence").GetProperty("weekdays").EnumerateArray().Select(day => day.GetInt32()));
         Assert.Equal("2026-09-01", item.GetProperty("startDate").GetString());
         Assert.Equal(["2026-10-05", "2026-10-06", "2026-10-07"], item.GetProperty("completedDates").EnumerateArray().Select(d => d.GetString()));
         Assert.Equal(3, item.GetProperty("currentStreak").GetInt32()); // Thursday 8th is still open
@@ -335,7 +335,8 @@ public class HabitOverviewApiTests
         await user.MarkAsync(habit, "2026-10-06", "2026-10-07"); // Tue + Wed
         Assert.Equal(2, Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "2026-10-08")).EnumerateArray()).GetProperty("currentStreak").GetInt32());
 
-        await user.Client.PutAsync($"/api/habits/{habit}", new { title = "Gym", schedule = new[] { 6, 0 } }); // weekends only
+        await user.Client.PutAsync(
+            $"/api/habits/{habit}", new { title = "Gym", recurrence = new { kind = "weekly", weekdays = new[] { 6, 0 } } }); // weekends only
 
         // Tue + Wed are no longer planned days, so they do not count - and no planned day has been missed either.
         Assert.Equal(0, Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "2026-10-08")).EnumerateArray()).GetProperty("currentStreak").GetInt32());

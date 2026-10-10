@@ -30,11 +30,9 @@ public class UpdateHabitCommandHandler : IRequestHandler<UpdateHabitCommand, Uni
         // A rule that counts from a day, sent without one, counts from the start date the habit has after this update.
         var startDate = request.StartDate ?? habit.StartDate;
 
-        // The validator has already asked for one of the two; the Domain error is for a caller that skipped it.
+        // The validator has already asked for the rule; the Domain error is for a caller that skipped it.
         var schedule = request.Recurrence?.ToSchedule(startDate)
-                       ?? (request.Schedule is null
-                           ? throw new DomainException("A habit needs a recurrence rule.")
-                           : HabitSchedule.Weekly(request.Schedule));
+                       ?? throw new DomainException("A habit needs a recurrence rule.");
 
         habit.Update(HabitTitle.Create(request.Title), request.Description, schedule, request.StartDate);
 

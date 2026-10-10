@@ -3,7 +3,9 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Application.Habits;
 using HannasHabits.Application.Habits.Commands.CreateHabit;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Application.Tests.Fakes;
+using HannasHabits.Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -93,10 +95,13 @@ public class ApplicationCompositionTests
         var mediator = provider.GetRequiredService<IMediator>();
 
         var exception = await Assert.ThrowsAsync<ValidationException>(
-            () => mediator.Send(new CreateHabitCommand { Title = "", Schedule = [] }));
+            () => mediator.Send(new CreateHabitCommand
+            {
+                Title = "", Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 1 }
+            }));
 
         Assert.Contains(exception.Errors, e => e.PropertyName == "Title");
-        Assert.Contains(exception.Errors, e => e.PropertyName == "Schedule");
+        Assert.Contains(exception.Errors, e => e.PropertyName == "Recurrence.Interval");
         Assert.Empty(habits.Habits);
         Assert.Equal(0, unitOfWork.SaveCount);
     }

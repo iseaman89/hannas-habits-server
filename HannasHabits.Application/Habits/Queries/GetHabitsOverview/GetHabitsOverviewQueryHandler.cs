@@ -31,7 +31,6 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
             .Select(habit => new HabitOverviewDto(
                 habit.Id,
                 habit.Title,
-                habit.Schedule.Days,
                 RecurrenceDto.From(habit.Schedule),
                 habit.StartDate,
                 HabitDueDays.Between(habit.Schedule, habit.StartDate, from, to),

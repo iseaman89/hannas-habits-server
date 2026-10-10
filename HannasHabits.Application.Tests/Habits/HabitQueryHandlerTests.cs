@@ -98,13 +98,14 @@ public class GetHabitsOverviewQueryHandlerTests
             {
                 Assert.Equal(first.Id, item.Id);
                 Assert.Equal("Read", item.Title);
-                Assert.Equal(HabitSchedule.Daily.Days, item.Schedule);
+                Assert.Equal(ScheduleKind.Weekly, item.Recurrence.Kind);
+                Assert.Equal(HabitSchedule.Daily.Days, item.Recurrence.Weekdays);
                 Assert.Equal(new DateOnly(2026, 1, 5), item.StartDate);
             },
             item =>
             {
                 Assert.Equal(second.Id, item.Id);
-                Assert.Equal([DayOfWeek.Monday, DayOfWeek.Saturday], item.Schedule);
+                Assert.Equal([DayOfWeek.Monday, DayOfWeek.Saturday], item.Recurrence.Weekdays);
                 Assert.Equal(new DateOnly(2026, 2, 6), item.StartDate);
             });
     }
@@ -127,7 +128,7 @@ public class GetHabitsOverviewQueryHandlerTests
     }
 
     [Fact]
-    public async Task TheRecurrence_IsTheRuleItself_NotJustItsWeekdays()
+    public async Task TheRecurrence_IsTheRuleItself()
     {
         _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 10, 1),
             HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10))));
@@ -137,7 +138,7 @@ public class GetHabitsOverviewQueryHandlerTests
         Assert.Equal(ScheduleKind.EveryNDays, item.Recurrence.Kind);
         Assert.Equal(3, item.Recurrence.Interval);
         Assert.Equal(new DateOnly(2026, 10, 10), item.Recurrence.Anchor);
-        Assert.Equal(HabitSchedule.Daily.Days, item.Schedule); // the deprecated list: every weekday is possible
+        Assert.Empty(item.Recurrence.Weekdays);
     }
 
     [Fact]

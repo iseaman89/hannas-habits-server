@@ -132,7 +132,11 @@ public class OpenApiContractTests
 
         // One habit with every optional value, one without (description = null in the answers).
         var create = await user.Client.PostAsync("/api/habits",
-            new { title = "Read", description = "Twenty pages", schedule = new[] { 1, 3, 5 }, startDate = "2026-10-01" });
+            new
+            {
+                title = "Read", description = "Twenty pages", startDate = "2026-10-01",
+                recurrence = new { kind = "weekly", weekdays = new[] { 1, 3, 5 } }
+            });
         await AssertFitsAsync(contract, "POST", "/api/habits", create, HttpStatusCode.Created);
         var habitId = (await create.ReadJsonAsync()).GetProperty("id").GetGuid();
         await user.CreateHabitAsync("Stretch");
@@ -229,7 +233,7 @@ public class OpenApiContractTests
         await AssertFitsAsync(contract, "GET", "/api/habits/{id}", missing, HttpStatusCode.NotFound);
 
         // errors.<field> is what the forms map onto their fields: field name -> messages.
-        var invalid = await user.Client.PostAsync("/api/habits", new { title = "", schedule = new[] { 1 } });
+        var invalid = await user.Client.PostAsync("/api/habits", new { title = "", recurrence = new { kind = "weekly", weekdays = new[] { 1 } } });
         await AssertFitsAsync(contract, "POST", "/api/habits", invalid, HttpStatusCode.BadRequest);
         Assert.Contains("title", await invalid.ErrorKeysAsync());
 

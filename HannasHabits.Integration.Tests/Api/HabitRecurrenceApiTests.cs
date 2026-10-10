@@ -42,61 +42,52 @@ public class HabitRecurrenceApiTests
 
     private static string[] Oct(params int[] days) => ApiExtensions.Days(2026, 10, days);
 
-    public static TheoryData<string, object, Rule, string> EveryKind => new()
+    public static TheoryData<string, object, Rule> EveryKind => new()
     {
         {
             "weekly, every week",
             new { kind = "weekly", weekdays = new[] { 3, 1 } },
-            new Rule("weekly", "1,3", 1, null, null, null, null),
-            "1,3"
+            new Rule("weekly", "1,3", 1, null, null, null, null)
         },
         {
             "weekly, every 2nd week, with its anchor",
             new { kind = "weekly", weekdays = new[] { 1, 4 }, interval = 2, anchor = "2026-10-07" },
-            new Rule("weekly", "1,4", 2, "2026-10-07", null, null, null),
-            "1,4"
+            new Rule("weekly", "1,4", 2, "2026-10-07", null, null, null)
         },
         {
             "weekly, every 2nd week, without an anchor: counted from the start date",
             new { kind = "weekly", weekdays = new[] { 1 }, interval = 2 },
-            new Rule("weekly", "1", 2, "2026-03-01", null, null, null),
-            "1"
+            new Rule("weekly", "1", 2, "2026-03-01", null, null, null)
         },
         {
             "every 3 days",
             new { kind = "everyNDays", interval = 3, anchor = "2026-10-10" },
-            new Rule("everyNDays", "", 3, "2026-10-10", null, null, null),
-            "0,1,2,3,4,5,6"
+            new Rule("everyNDays", "", 3, "2026-10-10", null, null, null)
         },
         {
             "every 3 days, without an anchor: counted from the start date",
             new { kind = "everyNDays", interval = 3 },
-            new Rule("everyNDays", "", 3, "2026-03-01", null, null, null),
-            "0,1,2,3,4,5,6"
+            new Rule("everyNDays", "", 3, "2026-03-01", null, null, null)
         },
         {
             "the last Saturday of the month",
             new { kind = "monthlyOnWeekday", occurrence = "last", weekday = 6 },
-            new Rule("monthlyOnWeekday", "", 1, null, "last", 6, null),
-            "6"
+            new Rule("monthlyOnWeekday", "", 1, null, "last", 6, null)
         },
         {
             "the second Monday of the month",
             new { kind = "monthlyOnWeekday", occurrence = "second", weekday = 1 },
-            new Rule("monthlyOnWeekday", "", 1, null, "second", 1, null),
-            "1"
+            new Rule("monthlyOnWeekday", "", 1, null, "second", 1, null)
         },
         {
             "the 15th of the month",
             new { kind = "monthlyOnDate", dayOfMonth = 15 },
-            new Rule("monthlyOnDate", "", 1, null, null, null, 15),
-            "0,1,2,3,4,5,6"
+            new Rule("monthlyOnDate", "", 1, null, null, null, 15)
         },
         {
             "the 31st of the month",
             new { kind = "monthlyOnDate", dayOfMonth = 31 },
-            new Rule("monthlyOnDate", "", 1, null, null, null, 31),
-            "0,1,2,3,4,5,6"
+            new Rule("monthlyOnDate", "", 1, null, null, null, 31)
         }
     };
 
@@ -105,7 +96,7 @@ public class HabitRecurrenceApiTests
     [Theory]
     [MemberData(nameof(EveryKind))]
     public async Task Create_TheRuleComesBackUnchanged_FromEveryRead(
-        string description, object recurrence, Rule expected, string possibleWeekdays)
+        string description, object recurrence, Rule expected)
     {
         var user = await NewUser();
 
@@ -116,11 +107,9 @@ public class HabitRecurrenceApiTests
         var body = await created.ReadJsonAsync();
         var id = body.GetProperty("id").GetGuid();
         Assert.Equal(expected, RuleOf(body.GetProperty("recurrence")));
-        Assert.Equal(possibleWeekdays, string.Join(",", body.GetProperty("schedule").EnumerateArray().Select(d => d.GetInt32())));
 
         var details = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
         Assert.Equal(expected, RuleOf(details.GetProperty("recurrence")));
-        Assert.Equal(possibleWeekdays, string.Join(",", details.GetProperty("schedule").EnumerateArray().Select(d => d.GetInt32())));
 
         var list = await (await user.Client.GetAsync("/api/habits")).ReadJsonAsync();
         var listed = Assert.Single(list.EnumerateArray());
@@ -156,30 +145,52 @@ public class HabitRecurrenceApiTests
             RuleOf(created.GetProperty("recurrence")));
     }
 
+    // The weekday list `schedule` of B2..B13 is gone (B13b): no answer carries it, and a client that still sends it
+    // does not get a rule out of it - on create the habit is due every day, an update is refused like one without a rule.
+
     [Fact]
-    public async Task TheDeprecatedSchedule_IsStillAWeeklyRule()
+    public async Task TheDroppedSchedule_IsNotInAnyAnswer()
     {
         var user = await NewUser();
+        var created = await (await user.Client.PostAsync("/api/habits", new { title = "Read", startDate = "2026-10-01" })).ReadJsonAsync();
+        var id = created.GetProperty("id").GetGuid();
 
-        var created = await (await user.Client.PostAsync("/api/habits", new { title = "Read", schedule = new[] { 5, 1 } })).ReadJsonAsync();
+        var details = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        var list = await (await user.Client.GetAsync("/api/habits")).ReadJsonAsync();
+        var overview = await user.OverviewAsync("2026-10-01", "2026-10-31", "2026-10-31");
 
-        Assert.Equal(new Rule("weekly", "1,5", 1, null, null, null, null), RuleOf(created.GetProperty("recurrence")));
+        Assert.False(created.TryGetProperty("schedule", out _));
+        Assert.False(details.TryGetProperty("schedule", out _));
+        Assert.False(Assert.Single(list.EnumerateArray()).TryGetProperty("schedule", out _));
+        Assert.False(Assert.Single(overview.EnumerateArray()).TryGetProperty("schedule", out _));
     }
 
     [Fact]
-    public async Task WhenBothAreSent_TheRecurrenceWins_AndTheDeprecatedListIsNotLookedAt()
+    public async Task ASchedule_SentByAnOldClient_IsNotARule_OnCreate()
     {
         var user = await NewUser();
 
-        var created = await user.Client.PostAsync("/api/habits", new
-        {
-            title = "Read",
-            schedule = Array.Empty<int>(), // would be a 400 on its own
-            recurrence = new { kind = "monthlyOnDate", dayOfMonth = 1 }
-        });
+        var created = await user.Client.PostAsync("/api/habits", new { title = "Read", schedule = new[] { 5, 1 } });
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        Assert.Equal("monthlyOnDate", (await created.ReadJsonAsync()).GetProperty("recurrence").GetProperty("kind").GetString());
+        Assert.Equal(
+            new Rule("weekly", "0,1,2,3,4,5,6", 1, null, null, null, null),
+            RuleOf((await created.ReadJsonAsync()).GetProperty("recurrence")));
+    }
+
+    [Fact]
+    public async Task ASchedule_SentByAnOldClient_IsNotARule_OnUpdate()
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Read", recurrence: new { kind = "monthlyOnDate", dayOfMonth = 15 });
+
+        var response = await user.Client.PutAsync($"/api/habits/{id}", new { title = "Changed", schedule = new[] { 5, 1 } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("recurrence", await response.ErrorKeysAsync());
+        var details = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        Assert.Equal("Read", details.GetProperty("title").GetString());
+        Assert.Equal("monthlyOnDate", details.GetProperty("recurrence").GetProperty("kind").GetString());
     }
 
     [Fact]
@@ -254,7 +265,7 @@ public class HabitRecurrenceApiTests
     }
 
     [Fact]
-    public async Task Update_NeitherARecurrenceNorAScheduleIsA400_OnTheRecurrence()
+    public async Task Update_WithoutARecurrenceIsA400_OnTheRecurrence()
     {
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read");
