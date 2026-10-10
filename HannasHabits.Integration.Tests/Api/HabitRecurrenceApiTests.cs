@@ -5,7 +5,7 @@ using HannasHabits.Integration.Tests.Support;
 namespace HannasHabits.Integration.Tests.Api;
 
 /// <summary>
-/// The recurrence rules over HTTP: the five kinds of rule go in, come back unchanged from every read, drive the
+/// The recurrence rules over HTTP: the six kinds of rule go in, come back unchanged from every read, drive the
 /// overview's <c>scheduledDates</c> and the streak, and a wrong fact is a field error at the right position.
 /// </summary>
 [Collection(IntegrationCollection.Name)]
@@ -22,7 +22,8 @@ public class HabitRecurrenceApiTests
 
     // The rule as the API answers with it, flattened so that two of them compare with ==.
     public sealed record Rule(
-        string Kind, string Weekdays, int Interval, string? Anchor, string? Occurrence, int? Weekday, int? DayOfMonth);
+        string Kind, string Weekdays, int Interval, string? Anchor, string? Occurrence, int? Weekday, int? DayOfMonth,
+        int? Times = null);
 
     private static Rule RuleOf(JsonElement recurrence)
     {
@@ -35,7 +36,8 @@ public class HabitRecurrenceApiTests
             recurrence.GetProperty("anchor").GetString(),
             recurrence.GetProperty("occurrence").GetString(),
             Number(recurrence.GetProperty("weekday")),
-            Number(recurrence.GetProperty("dayOfMonth")));
+            Number(recurrence.GetProperty("dayOfMonth")),
+            Number(recurrence.GetProperty("times")));
     }
 
     private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!).ToArray();
@@ -88,6 +90,21 @@ public class HabitRecurrenceApiTests
             "the 31st of the month",
             new { kind = "monthlyOnDate", dayOfMonth = 31 },
             new Rule("monthlyOnDate", "", 1, null, null, null, 31)
+        },
+        {
+            "3 times a week",
+            new { kind = "timesPerWeek", times = 3 },
+            new Rule("timesPerWeek", "", 1, null, null, null, null, 3)
+        },
+        {
+            "every day of the week, as a quota",
+            new { kind = "timesPerWeek", times = 7 },
+            new Rule("timesPerWeek", "", 1, null, null, null, null, 7)
+        },
+        {
+            "8 times a month",
+            new { kind = "timesPerMonth", times = 8 },
+            new Rule("timesPerMonth", "", 1, null, null, null, null, 8)
         }
     };
 
@@ -210,6 +227,42 @@ public class HabitRecurrenceApiTests
             RuleOf((await created.ReadJsonAsync()).GetProperty("recurrence")));
     }
 
+    [Fact]
+    public async Task TheKindOfAQuota_IsAWord_AndTheCountANumber()
+    {
+        var user = await NewUser();
+
+        var created = await user.Client.PostAsync(
+            "/api/habits", new { title = "Gym", recurrence = new { kind = "timesPerWeek", times = 3 } });
+        var raw = await created.Content.ReadAsStringAsync();
+
+        Assert.Contains("\"kind\":\"timesPerWeek\"", raw);
+        Assert.Contains("\"times\":3", raw);
+    }
+
+    [Fact]
+    public async Task AFactThatDoesNotBelongToTheQuota_IsIgnored_AndTheCountIsIgnoredByTheOtherKinds()
+    {
+        var user = await NewUser();
+
+        var quota = await user.Client.PostAsync("/api/habits", new
+        {
+            title = "Gym",
+            recurrence = new { kind = "timesPerWeek", times = 3, weekdays = new[] { 1, 2 }, interval = 4, anchor = "2026-10-10", dayOfMonth = 9 }
+        });
+        var monthly = await user.Client.PostAsync("/api/habits", new
+        {
+            title = "Rent", recurrence = new { kind = "monthlyOnDate", dayOfMonth = 1, times = 99 }
+        });
+
+        Assert.Equal(HttpStatusCode.Created, quota.StatusCode);
+        Assert.Equal(
+            new Rule("timesPerWeek", "", 1, null, null, null, null, 3), RuleOf((await quota.ReadJsonAsync()).GetProperty("recurrence")));
+        Assert.Equal(HttpStatusCode.Created, monthly.StatusCode);
+        Assert.Equal(
+            new Rule("monthlyOnDate", "", 1, null, null, null, 1), RuleOf((await monthly.ReadJsonAsync()).GetProperty("recurrence")));
+    }
+
     // ---- update ----
 
     [Fact]
@@ -320,7 +373,14 @@ public class HabitRecurrenceApiTests
 
         { "monthly on a date without the date", new { kind = "monthlyOnDate" }, "recurrence.dayOfMonth" },
         { "the 0th", new { kind = "monthlyOnDate", dayOfMonth = 0 }, "recurrence.dayOfMonth" },
-        { "the 32nd", new { kind = "monthlyOnDate", dayOfMonth = 32 }, "recurrence.dayOfMonth" }
+        { "the 32nd", new { kind = "monthlyOnDate", dayOfMonth = 32 }, "recurrence.dayOfMonth" },
+
+        { "times a week without the count", new { kind = "timesPerWeek" }, "recurrence.times" },
+        { "0 times a week", new { kind = "timesPerWeek", times = 0 }, "recurrence.times" },
+        { "8 times a week", new { kind = "timesPerWeek", times = 8 }, "recurrence.times" },
+        { "times a month without the count", new { kind = "timesPerMonth" }, "recurrence.times" },
+        { "0 times a month", new { kind = "timesPerMonth", times = 0 }, "recurrence.times" },
+        { "29 times a month", new { kind = "timesPerMonth", times = 29 }, "recurrence.times" }
     };
 
     [Theory]
@@ -412,6 +472,127 @@ public class HabitRecurrenceApiTests
         await user.Client.DeleteAsync($"/api/habits/{habit}/records/2026-10-07");
         var broken = (await user.OverviewAsync("2026-10-01", "2026-10-31", asOf: "2026-10-14")).EnumerateArray().Single();
         Assert.Equal(2, broken.GetProperty("currentStreak").GetInt32()); // 13 and 10, then the missed 7th
+    }
+
+    // ---- a quota: no due day, progress per week or month, the streak counts them ----
+
+    [Fact]
+    public async Task Overview_AQuota_ListsEveryDayFromTheStart_AsADayThatCanBeTicked()
+    {
+        var user = await NewUser();
+        await user.CreateHabitAsync("Gym", startDate: "2026-10-26", recurrence: new { kind = "timesPerWeek", times = 3 });
+
+        var item = (await user.OverviewAsync("2026-10-24", "2026-10-31", asOf: "2026-10-28")).EnumerateArray().Single();
+
+        Assert.Equal(Oct(26, 27, 28, 29, 30, 31), Strings(item.GetProperty("scheduledDates")));
+    }
+
+    [Fact]
+    public async Task Overview_AQuota_AnswersTheProgressOfEveryWeek_AWeekAcrossTwoMonthsIsCountedWhole()
+    {
+        var user = await NewUser();
+        var habit = await user.CreateHabitAsync("Gym", startDate: "2026-09-01", recurrence: new { kind = "timesPerWeek", times = 3 });
+        await user.MarkAsync(habit, ["2026-09-28", "2026-09-30"]);
+        await user.MarkAsync(habit, Oct(2, 5, 6));
+
+        var item = (await user.OverviewAsync("2026-10-01", "2026-10-31", asOf: "2026-10-08")).EnumerateArray().Single();
+
+        var periods = item.GetProperty("quotaPeriods").EnumerateArray()
+            .Select(p => (p.GetProperty("from").GetString(), p.GetProperty("to").GetString(), p.GetProperty("done").GetInt32()))
+            .ToArray();
+        Assert.Equal(
+            [
+                ("2026-09-28", "2026-10-04", 3), // the week that began in September
+                ("2026-10-05", "2026-10-11", 2),
+                ("2026-10-12", "2026-10-18", 0),
+                ("2026-10-19", "2026-10-25", 0),
+                ("2026-10-26", "2026-11-01", 0)
+            ],
+            periods);
+        // Only the days of the grid's month are in `completedDates`, the week's September marks are not.
+        Assert.Equal(Oct(2, 5, 6), Strings(item.GetProperty("completedDates")));
+    }
+
+    [Fact]
+    public async Task Overview_AQuota_PerMonth_ListsTheMonths_AndTheStreakCountsMonths()
+    {
+        var user = await NewUser();
+        var habit = await user.CreateHabitAsync("Call home", startDate: "2026-07-01", recurrence: new { kind = "timesPerMonth", times = 2 });
+        await user.MarkAsync(habit, ["2026-08-01", "2026-08-30", "2026-09-05", "2026-09-20"]);
+        await user.MarkAsync(habit, Oct(2));
+
+        var item = (await user.OverviewAsync("2026-09-15", "2026-10-15", asOf: "2026-10-08")).EnumerateArray().Single();
+
+        var periods = item.GetProperty("quotaPeriods").EnumerateArray()
+            .Select(p => (p.GetProperty("from").GetString(), p.GetProperty("done").GetInt32()))
+            .ToArray();
+        Assert.Equal([("2026-09-01", 2), ("2026-10-01", 1)], periods);
+        // October (1 of 2) is still running and is skipped; September and August reached it; July did not.
+        Assert.Equal(2, item.GetProperty("currentStreak").GetInt32());
+    }
+
+    [Fact]
+    public async Task Overview_AQuota_TheStreakIsInWeeks_AndAWeekThatFellShortEndsIt()
+    {
+        var user = await NewUser();
+        var habit = await user.CreateHabitAsync("Gym", startDate: "2026-09-01", recurrence: new { kind = "timesPerWeek", times = 3 });
+        await user.MarkAsync(habit, Oct(5, 6, 8)); // this week: 3 of 3
+        await user.MarkAsync(habit, ["2026-09-28", "2026-09-30"]);
+        await user.MarkAsync(habit, Oct(1)); // last week: 3 of 3
+        await user.MarkAsync(habit, ["2026-09-21", "2026-09-22"]); // the week before: 2 of 3
+
+        var item = (await user.OverviewAsync("2026-10-01", "2026-10-31", asOf: "2026-10-08")).EnumerateArray().Single();
+
+        Assert.Equal(2, item.GetProperty("currentStreak").GetInt32());
+
+        await user.Client.DeleteAsync($"/api/habits/{habit}/records/2026-10-08");
+        var open = (await user.OverviewAsync("2026-10-01", "2026-10-31", asOf: "2026-10-08")).EnumerateArray().Single();
+        Assert.Equal(1, open.GetProperty("currentStreak").GetInt32()); // the running week (2 of 3) is skipped, not a break
+    }
+
+    [Fact]
+    public async Task Overview_AQuota_TheDaysMayBeAnyOfTheWeek_ThroughTheRealMarkEndpoint()
+    {
+        var user = await NewUser();
+        var habit = await user.CreateHabitAsync("Gym", startDate: "2026-10-01", recurrence: new { kind = "timesPerWeek", times = 2 });
+
+        // A Wednesday and a Sunday: no weekday was ever "scheduled", both mark fine.
+        var wednesday = await user.Client.PutAsync($"/api/habits/{habit}/records/2026-10-07");
+        var sunday = await user.Client.PutAsync($"/api/habits/{habit}/records/2026-10-11");
+
+        Assert.Equal(HttpStatusCode.OK, wednesday.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sunday.StatusCode);
+        var item = (await user.OverviewAsync("2026-10-05", "2026-10-11", asOf: "2026-10-11")).EnumerateArray().Single();
+        Assert.Equal(2, item.GetProperty("quotaPeriods")[0].GetProperty("done").GetInt32());
+        Assert.Equal(1, item.GetProperty("currentStreak").GetInt32());
+    }
+
+    [Fact]
+    public async Task Overview_ARuleWithDueDays_HasNoQuotaPeriods()
+    {
+        var user = await NewUser();
+        await user.CreateHabitAsync("Read", startDate: "2026-10-01");
+        await user.CreateHabitAsync("Rent", startDate: "2026-10-01", recurrence: new { kind = "monthlyOnDate", dayOfMonth = 1 });
+
+        var overview = await user.OverviewAsync("2026-10-01", "2026-10-31", asOf: "2026-10-08");
+
+        Assert.All(overview.EnumerateArray(), item => Assert.Empty(item.GetProperty("quotaPeriods").EnumerateArray()));
+    }
+
+    [Fact]
+    public async Task Update_ARuleWithDueDaysBecomesAQuota_AndBack()
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Gym", startDate: "2026-10-01",
+            recurrence: new { kind = "everyNDays", interval = 3, anchor = "2026-10-10" });
+
+        await user.Client.PutAsync($"/api/habits/{id}", new { title = "Gym", recurrence = new { kind = "timesPerWeek", times = 3 } });
+        var asQuota = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        await user.Client.PutAsync($"/api/habits/{id}", new { title = "Gym", recurrence = new { kind = "weekly", weekdays = new[] { 5 } } });
+        var asWeekly = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+
+        Assert.Equal(new Rule("timesPerWeek", "", 1, null, null, null, null, 3), RuleOf(asQuota.GetProperty("recurrence")));
+        Assert.Equal(new Rule("weekly", "5", 1, null, null, null, null), RuleOf(asWeekly.GetProperty("recurrence")));
     }
 
     // ---- isolation ----

@@ -33,6 +33,9 @@ public class RecurrenceInput
     /// <summary>Monthly on a date: 1..31.</summary>
     public int? DayOfMonth { get; set; }
 
+    /// <summary>Times a week (1..7) or times a month (1..28).</summary>
+    public int? Times { get; set; }
+
     /// <summary>
     /// The schedule this input describes. The validator has already checked that the needed facts are there; the Domain
     /// factories enforce the rules once more.
@@ -44,6 +47,8 @@ public class RecurrenceInput
         ScheduleKind.EveryNDays => HabitSchedule.EveryNDays(Interval!.Value, Anchor ?? defaultAnchor),
         ScheduleKind.MonthlyOnWeekday => HabitSchedule.MonthlyOnWeekday(Occurrence!.Value, Weekday!.Value),
         ScheduleKind.MonthlyOnDate => HabitSchedule.MonthlyOnDate(DayOfMonth!.Value),
+        ScheduleKind.TimesPerWeek => HabitSchedule.TimesPerWeek(Times!.Value),
+        ScheduleKind.TimesPerMonth => HabitSchedule.TimesPerMonth(Times!.Value),
         _ => throw new InvalidOperationException($"Unknown schedule kind '{Kind}'.")
     };
 }

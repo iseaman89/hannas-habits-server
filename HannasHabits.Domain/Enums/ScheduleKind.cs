@@ -13,5 +13,14 @@ public enum ScheduleKind
     MonthlyOnWeekday = 2,
 
     /// <summary>One date of the month ("the 15th", "the last day").</summary>
-    MonthlyOnDate = 3
+    MonthlyOnDate = 3,
+
+    /// <summary>
+    /// A quota, no fixed day: N times in every calendar week, on any days ("3 times a week"). The streak counts weeks
+    /// that reached it.
+    /// </summary>
+    TimesPerWeek = 4,
+
+    /// <summary>A quota, no fixed day: N times in every calendar month, on any days. The streak counts months.</summary>
+    TimesPerMonth = 5
 }

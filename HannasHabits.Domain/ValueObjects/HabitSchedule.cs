@@ -6,14 +6,20 @@ namespace HannasHabits.Domain.ValueObjects;
 /// <summary>
 /// The rule that decides on which days a habit is due, answered by <see cref="IsScheduledOn"/>: on chosen weekdays
 /// (every week or every N weeks), every N days, on one weekday of the month ("the last Saturday") or on one date of the
-/// month. Immutable; two schedules with the same rule are equal (record equality). Every instance is valid: it can only
-/// be made through one of the factories.
+/// month - or, as a quota, N times in every week or month on whichever days (<see cref="IsQuota"/>). Immutable; two
+/// schedules with the same rule are equal (record equality). Every instance is valid: it can only be made through one
+/// of the factories.
 /// </summary>
 /// <remarks>
 /// One sealed type with a <see cref="Kind"/> instead of a class per rule: a schedule is stored in the columns of its
 /// habit (EF Core cannot map a polymorphic value object to flat columns), and four small rules do not need four types.
 /// The rules that count from a day (<see cref="Anchor"/>) keep their own anchor - it is part of the rule, not the
 /// habit's start date, so moving the start date never shifts the rhythm.
+/// <para>
+/// A quota is the one rule without a due day: <see cref="IsScheduledOn"/> says "yes" for every day (any day can be
+/// ticked and counts), and the question that matters - "did this week reach its N?" - is answered per
+/// <see cref="CalendarPeriod"/> by <c>HabitQuota</c> and <c>HabitStreak</c>.
+/// </para>
 /// </remarks>
 public sealed record HabitSchedule
 {
@@ -25,6 +31,13 @@ public sealed record HabitSchedule
     public const int MaxDayInterval = 365;
 
     public const int MaxDayOfMonth = 31;
+
+    /// <summary>
+    /// The most a quota can ask for. A month's limit is 28 so that every month - February included - can reach it; a
+    /// week's is 7 ("every day of the week", which is not the same as <see cref="Daily"/>: the streak counts weeks).
+    /// </summary>
+    public const int MaxTimesPerWeek = 7;
+    public const int MaxTimesPerMonth = 28;
 
     /// <summary>The same plausible range as a habit's start date: keeps absurd anchors out of the day arithmetic.</summary>
     public static readonly DateOnly MinAnchor = new(2000, 1, 1);
@@ -59,6 +72,12 @@ public sealed record HabitSchedule
 
     /// <summary>Set for <see cref="ScheduleKind.MonthlyOnWeekday"/> only.</summary>
     public WeekdayOccurrence? Occurrence { get; private init; }
+
+    /// <summary>How many times in a week or month: set for <see cref="ScheduleKind.TimesPerWeek"/> and <see cref="ScheduleKind.TimesPerMonth"/> only.</summary>
+    public int? Times { get; private init; }
+
+    /// <summary>A quota ("3 times a week"): no day is due on its own, a week or month is met or not.</summary>
+    public bool IsQuota => Kind is ScheduleKind.TimesPerWeek or ScheduleKind.TimesPerMonth;
 
     /// <summary>
     /// 1..31, set for <see cref="ScheduleKind.MonthlyOnDate"/> only. A date a month does not have ("the 31st" in April)
@@ -148,9 +167,34 @@ public sealed record HabitSchedule
         };
     }
 
+    /// <summary>N times in every calendar week (Monday to Sunday), on any days.</summary>
+    public static HabitSchedule TimesPerWeek(int times)
+    {
+        if (times is < 1 or > MaxTimesPerWeek)
+            throw new DomainException($"A habit can be done 1 to {MaxTimesPerWeek} times a week.");
+
+        return new HabitSchedule
+        {
+            Kind = ScheduleKind.TimesPerWeek, WeekdayMask = AllDaysMask, Interval = 1, Times = times
+        };
+    }
+
+    /// <summary>N times in every calendar month, on any days.</summary>
+    public static HabitSchedule TimesPerMonth(int times)
+    {
+        if (times is < 1 or > MaxTimesPerMonth)
+            throw new DomainException($"A habit can be done 1 to {MaxTimesPerMonth} times a month.");
+
+        return new HabitSchedule
+        {
+            Kind = ScheduleKind.TimesPerMonth, WeekdayMask = AllDaysMask, Interval = 1, Times = times
+        };
+    }
+
     /// <summary>
     /// Whether the habit is due on <paramref name="date"/> by this rule alone - the habit's start date is not the
-    /// schedule's business. Defined for every date, also before an anchor.
+    /// schedule's business. Defined for every date, also before an anchor. A quota has no due day: every day is one
+    /// that can be ticked, so it answers "yes" (whether it is *needed* is a question about the whole period).
     /// </summary>
     public bool IsScheduledOn(DateOnly date) => Kind switch
     {
@@ -158,7 +202,16 @@ public sealed record HabitSchedule
         ScheduleKind.EveryNDays => FloorMod(date.DayNumber - Anchor!.Value.DayNumber, Interval) == 0,
         ScheduleKind.MonthlyOnWeekday => HasWeekday(date.DayOfWeek) && IsOccurrenceInMonth(date),
         ScheduleKind.MonthlyOnDate => date.Day == Math.Min(DayOfMonth!.Value, DateTime.DaysInMonth(date.Year, date.Month)),
+        ScheduleKind.TimesPerWeek or ScheduleKind.TimesPerMonth => true,
         _ => throw new InvalidOperationException($"Unknown schedule kind '{Kind}'.")
+    };
+
+    /// <summary>The week or month a quota is counted in that contains <paramref name="date"/>. Only for a quota.</summary>
+    public CalendarPeriod PeriodOf(DateOnly date) => Kind switch
+    {
+        ScheduleKind.TimesPerWeek => CalendarPeriod.WeekOf(date),
+        ScheduleKind.TimesPerMonth => CalendarPeriod.MonthOf(date),
+        _ => throw new InvalidOperationException($"A '{Kind}' schedule has no period: it is not a quota.")
     };
 
     // 0001-01-01 - day number 0 - is a Monday, so the day number divided by 7 counts Monday-based weeks without any
@@ -208,6 +261,8 @@ public sealed record HabitSchedule
         ScheduleKind.EveryNDays => $"Every {Interval} days (counted from {Anchor:O})",
         ScheduleKind.MonthlyOnWeekday => $"The {Occurrence!.Value.ToString().ToLowerInvariant()} {Days.Single()} of the month",
         ScheduleKind.MonthlyOnDate => $"Day {DayOfMonth} of the month",
+        ScheduleKind.TimesPerWeek => $"{Times} times a week",
+        ScheduleKind.TimesPerMonth => $"{Times} times a month",
         _ => Kind.ToString()
     };
 }

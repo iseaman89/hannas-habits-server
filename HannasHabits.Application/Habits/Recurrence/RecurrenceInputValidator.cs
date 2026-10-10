@@ -45,5 +45,19 @@ public class RecurrenceInputValidator : AbstractValidator<RecurrenceInput>
                 .NotNull()
                 .InclusiveBetween(1, HabitSchedule.MaxDayOfMonth);
         });
+
+        When(x => x.Kind == ScheduleKind.TimesPerWeek, () =>
+        {
+            RuleFor(x => x.Times)
+                .NotNull()
+                .InclusiveBetween(1, HabitSchedule.MaxTimesPerWeek);
+        });
+
+        When(x => x.Kind == ScheduleKind.TimesPerMonth, () =>
+        {
+            RuleFor(x => x.Times)
+                .NotNull()
+                .InclusiveBetween(1, HabitSchedule.MaxTimesPerMonth);
+        });
     }
 }

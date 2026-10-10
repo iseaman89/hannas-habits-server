@@ -165,6 +165,89 @@ public class GetHabitsOverviewQueryHandlerTests
     }
 
     [Fact]
+    public async Task AQuota_HasNoDueDays_EveryDayFromTheStartCanBeTicked_AndTheTimesAreInTheRecurrence()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 10, 20), HabitSchedule.TimesPerWeek(3)));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 18), new DateOnly(2026, 10, 24)));
+
+        Assert.Equal(ScheduleKind.TimesPerWeek, item.Recurrence.Kind);
+        Assert.Equal(3, item.Recurrence.Times);
+        Assert.Equal(Days(10, 20, 21, 22, 23, 24), item.ScheduledDates); // none before the start date
+    }
+
+    [Fact]
+    public async Task AQuota_AnswersTheProgressOfEveryWeekOfTheRange_CountedOverTheWholeWeek()
+    {
+        // Monday 28 September .. Sunday 4 October is one week: its marks of September count in October's grid.
+        var completed = Days(9, 28, 30).Concat(Days(10, 2, 5, 6)).ToArray();
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 9, 1), HabitSchedule.TimesPerWeek(3), completed: completed));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Collection(item.QuotaPeriods,
+            week => Assert.Equal((new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 4), 3), (week.From, week.To, week.Done)),
+            week => Assert.Equal((new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 11), 2), (week.From, week.To, week.Done)),
+            week => Assert.Equal(0, week.Done),
+            week => Assert.Equal(0, week.Done),
+            week => Assert.Equal((new DateOnly(2026, 10, 26), new DateOnly(2026, 11, 1), 0), (week.From, week.To, week.Done)));
+    }
+
+    [Fact]
+    public async Task AQuota_ThePeriodsFollowTheRequestedAsOfDay_NotTheServerClock()
+    {
+        // The server's today is 8 October (TestClock). For a client whose today is the 6th, the mark of the 7th is ahead.
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 9, 1), HabitSchedule.TimesPerWeek(2),
+            completed: Days(10, 5, 7)));
+
+        var item = Assert.Single(await Handle(Today, Today, asOf: new DateOnly(2026, 10, 6)));
+
+        Assert.Equal(1, Assert.Single(item.QuotaPeriods).Done);
+        Assert.Equal(0, item.CurrentStreak);
+    }
+
+    [Fact]
+    public async Task AQuota_PerMonth_ListsTheMonthsOfTheRange()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Call home", new DateOnly(2026, 1, 1), HabitSchedule.TimesPerMonth(2),
+            completed: Days(10, 2, 3).Concat(Days(9, 5, 20)).ToArray()));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 9, 15), new DateOnly(2026, 10, 15)));
+
+        Assert.Equal(
+            [(new DateOnly(2026, 9, 1), 2), (new DateOnly(2026, 10, 1), 2)],
+            item.QuotaPeriods.Select(period => (period.From, period.Done)));
+        Assert.Equal(2, item.CurrentStreak); // October reached its 2, September did too
+    }
+
+    [Fact]
+    public async Task AQuota_TheStreakCountsWeeks_NotDays()
+    {
+        // This week (5 - 11 October) has 3 of 3, the week before has 3 of 3, the one before that only 1.
+        var completed = Days(10, 5, 6, 7).Concat(Days(9, 28, 30)).Concat(Days(10, 1)).Concat(Days(9, 23)).ToArray();
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 9, 1), HabitSchedule.TimesPerWeek(3), completed: completed));
+
+        var item = Assert.Single(await Handle(Today, Today));
+
+        Assert.Equal(2, item.CurrentStreak);
+    }
+
+    [Fact]
+    public async Task ARuleWithDueDays_HasNoQuotaPeriods()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Read"));
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Rent", schedule: HabitSchedule.MonthlyOnDate(1)));
+
+        var overview = await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31));
+
+        Assert.All(overview, item =>
+        {
+            Assert.Empty(item.QuotaPeriods);
+            Assert.Null(item.Recurrence.Times);
+        });
+    }
+
+    [Fact]
     public async Task CompletedDatesAreLimitedToTheRange_InclusiveAtBothEnds_OldestFirst()
     {
         // Added in a scrambled order on purpose.

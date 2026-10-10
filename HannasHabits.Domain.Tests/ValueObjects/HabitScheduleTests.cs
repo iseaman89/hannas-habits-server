@@ -542,6 +542,125 @@ public class HabitScheduleTests
         Assert.Equal(0, DateOnly.MinValue.DayNumber);
     }
 
+    // ---- a quota: N times a week / month ----
+
+    [Fact]
+    public void TimesPerWeek_IsAQuotaWithNoFixedDay()
+    {
+        var schedule = HabitSchedule.TimesPerWeek(3);
+
+        Assert.Equal(ScheduleKind.TimesPerWeek, schedule.Kind);
+        Assert.Equal(3, schedule.Times);
+        Assert.True(schedule.IsQuota);
+        Assert.Null(schedule.Anchor);
+        Assert.Null(schedule.Occurrence);
+        Assert.Null(schedule.DayOfMonth);
+        Assert.Equal(1, schedule.Interval);
+        Assert.Equal(AllDays, schedule.Days);
+    }
+
+    [Fact]
+    public void TimesPerMonth_IsAQuotaWithNoFixedDay()
+    {
+        var schedule = HabitSchedule.TimesPerMonth(8);
+
+        Assert.Equal(ScheduleKind.TimesPerMonth, schedule.Kind);
+        Assert.Equal(8, schedule.Times);
+        Assert.True(schedule.IsQuota);
+        Assert.Equal(AllDays, schedule.Days);
+    }
+
+    [Fact]
+    public void TheOtherRules_AreNoQuota_AndHaveNoCount()
+    {
+        HabitSchedule[] rules =
+        [
+            HabitSchedule.Daily,
+            HabitSchedule.Weekly([DayOfWeek.Monday], 2, D(2026, 10, 5)),
+            HabitSchedule.EveryNDays(3, D(2026, 10, 5)),
+            HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Last, DayOfWeek.Saturday),
+            HabitSchedule.MonthlyOnDate(15)
+        ];
+
+        Assert.All(rules, rule =>
+        {
+            Assert.False(rule.IsQuota);
+            Assert.Null(rule.Times);
+            Assert.Throws<InvalidOperationException>(() => rule.PeriodOf(D(2026, 10, 8)));
+        });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(7)]
+    public void TimesPerWeek_AcceptsOneToSeven(int times)
+    {
+        Assert.Equal(times, HabitSchedule.TimesPerWeek(times).Times);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(8)]
+    [InlineData(int.MaxValue)]
+    [InlineData(int.MinValue)]
+    public void TimesPerWeek_RejectsACountOutsideOneToSeven(int times)
+    {
+        Assert.Throws<DomainException>(() => HabitSchedule.TimesPerWeek(times));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(15)]
+    [InlineData(28)] // what February can always reach
+    public void TimesPerMonth_AcceptsOneToTwentyEight(int times)
+    {
+        Assert.Equal(times, HabitSchedule.TimesPerMonth(times).Times);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(29)]
+    [InlineData(31)]
+    [InlineData(int.MaxValue)]
+    public void TimesPerMonth_RejectsACountOutsideOneToTwentyEight(int times)
+    {
+        Assert.Throws<DomainException>(() => HabitSchedule.TimesPerMonth(times));
+    }
+
+    [Fact]
+    public void AQuota_IsDueOnEveryDay_AnyDayCanBeTicked()
+    {
+        foreach (var schedule in new[] { HabitSchedule.TimesPerWeek(2), HabitSchedule.TimesPerMonth(5) })
+            Assert.All(DaysOfRange(D(2026, 2, 1), D(2028, 3, 1)), date => Assert.True(schedule.IsScheduledOn(date)));
+    }
+
+    [Fact]
+    public void PeriodOf_IsTheMondayToSundayWeek_ForTimesPerWeek()
+    {
+        var period = HabitSchedule.TimesPerWeek(3).PeriodOf(D(2026, 10, 8));
+
+        Assert.Equal((D(2026, 10, 5), D(2026, 10, 11)), (period.From, period.To));
+    }
+
+    [Fact]
+    public void PeriodOf_IsTheCalendarMonth_ForTimesPerMonth()
+    {
+        var period = HabitSchedule.TimesPerMonth(3).PeriodOf(D(2026, 10, 8));
+
+        Assert.Equal((D(2026, 10, 1), D(2026, 10, 31)), (period.From, period.To));
+    }
+
+    [Fact]
+    public void TwoQuotasWithTheSameCount_AreEqual_ADifferentCountOrPeriodIsNot()
+    {
+        Assert.Equal(HabitSchedule.TimesPerWeek(3), HabitSchedule.TimesPerWeek(3));
+        Assert.NotEqual(HabitSchedule.TimesPerWeek(3), HabitSchedule.TimesPerWeek(4));
+        Assert.NotEqual(HabitSchedule.TimesPerWeek(3), HabitSchedule.TimesPerMonth(3));
+    }
+
     // ---- text ----
 
     [Fact]
@@ -559,5 +678,7 @@ public class HabitScheduleTests
         Assert.Equal("Every 3 days (counted from 2026-10-10)", HabitSchedule.EveryNDays(3, D(2026, 10, 10)).ToString());
         Assert.Equal("The last Saturday of the month", HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Last, DayOfWeek.Saturday).ToString());
         Assert.Equal("Day 15 of the month", HabitSchedule.MonthlyOnDate(15).ToString());
+        Assert.Equal("3 times a week", HabitSchedule.TimesPerWeek(3).ToString());
+        Assert.Equal("8 times a month", HabitSchedule.TimesPerMonth(8).ToString());
     }
 }

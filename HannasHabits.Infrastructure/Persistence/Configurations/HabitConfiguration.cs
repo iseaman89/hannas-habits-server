@@ -37,7 +37,7 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
         builder.Property(h => h.Description)
             .HasMaxLength(Habit.DescriptionMaxLength);
 
-        // One schedule over six flat columns (a complex property: a value without identity, stored in its habit's row).
+        // One schedule over seven flat columns (a complex property: a value without identity, stored in its habit's row).
         builder.ComplexProperty(h => h.Schedule, schedule =>
         {
             schedule.Property(s => s.Kind).HasColumnName(HabitScheduleColumns.Kind);
@@ -47,6 +47,7 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
             schedule.Property(s => s.Anchor).HasColumnName(HabitScheduleColumns.Anchor);
             schedule.Property(s => s.Occurrence).HasColumnName(HabitScheduleColumns.Occurrence);
             schedule.Property(s => s.DayOfMonth).HasColumnName(HabitScheduleColumns.DayOfMonth);
+            schedule.Property(s => s.Times).HasColumnName(HabitScheduleColumns.Times);
             schedule.Ignore(s => s.Days);
         });
 

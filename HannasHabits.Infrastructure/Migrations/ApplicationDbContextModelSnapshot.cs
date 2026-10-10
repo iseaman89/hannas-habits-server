@@ -124,6 +124,10 @@ namespace HannasHabits.Infrastructure.Migrations
                                 .HasColumnType("integer")
                                 .HasColumnName("ScheduleOccurrence");
 
+                            b1.Property<int?>("Times")
+                                .HasColumnType("integer")
+                                .HasColumnName("ScheduleTimes");
+
                             b1.Property<int>("WeekdayMask")
                                 .HasColumnType("integer")
                                 .HasColumnName("ScheduleWeekdays");
@@ -137,7 +141,7 @@ namespace HannasHabits.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Habits_ScheduleAnchor", "\"ScheduleAnchor\" IS NULL OR \"ScheduleAnchor\" BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'");
 
-                            t.HasCheckConstraint("CK_Habits_ScheduleRule", "(\"ScheduleKind\" = 0 AND \"ScheduleInterval\" BETWEEN 1 AND 52 AND ((\"ScheduleInterval\" = 1) = (\"ScheduleAnchor\" IS NULL)) AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL) OR (\"ScheduleKind\" = 1 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" BETWEEN 2 AND 365 AND \"ScheduleAnchor\" IS NOT NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL) OR (\"ScheduleKind\" = 2 AND (\"ScheduleWeekdays\" & (\"ScheduleWeekdays\" - 1)) = 0 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NOT NULL AND \"ScheduleOccurrence\" BETWEEN 1 AND 5 AND \"ScheduleDayOfMonth\" IS NULL) OR (\"ScheduleKind\" = 3 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NOT NULL AND \"ScheduleDayOfMonth\" BETWEEN 1 AND 31)");
+                            t.HasCheckConstraint("CK_Habits_ScheduleRule", "(\"ScheduleKind\" = 0 AND \"ScheduleInterval\" BETWEEN 1 AND 52 AND ((\"ScheduleInterval\" = 1) = (\"ScheduleAnchor\" IS NULL)) AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL AND \"ScheduleTimes\" IS NULL) OR (\"ScheduleKind\" = 1 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" BETWEEN 2 AND 365 AND \"ScheduleAnchor\" IS NOT NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL AND \"ScheduleTimes\" IS NULL) OR (\"ScheduleKind\" = 2 AND (\"ScheduleWeekdays\" & (\"ScheduleWeekdays\" - 1)) = 0 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NOT NULL AND \"ScheduleOccurrence\" BETWEEN 1 AND 5 AND \"ScheduleDayOfMonth\" IS NULL AND \"ScheduleTimes\" IS NULL) OR (\"ScheduleKind\" = 3 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NOT NULL AND \"ScheduleDayOfMonth\" BETWEEN 1 AND 31 AND \"ScheduleTimes\" IS NULL) OR (\"ScheduleKind\" = 4 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL AND \"ScheduleTimes\" IS NOT NULL AND \"ScheduleTimes\" BETWEEN 1 AND 7) OR (\"ScheduleKind\" = 5 AND \"ScheduleWeekdays\" = 127 AND \"ScheduleInterval\" = 1 AND \"ScheduleAnchor\" IS NULL AND \"ScheduleOccurrence\" IS NULL AND \"ScheduleDayOfMonth\" IS NULL AND \"ScheduleTimes\" IS NOT NULL AND \"ScheduleTimes\" BETWEEN 1 AND 28)");
 
                             t.HasCheckConstraint("CK_Habits_ScheduleWeekdays", "\"ScheduleWeekdays\" BETWEEN 1 AND 127");
 

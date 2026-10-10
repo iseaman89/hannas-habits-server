@@ -110,6 +110,27 @@ public class CreateHabitCommandHandlerTests
     }
 
     [Fact]
+    public async Task AQuota_IsStoredWithItsCount_AndAnswersWithIt()
+    {
+        var weekly = await Handle(new CreateHabitCommand
+        {
+            Title = "Gym", Recurrence = new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek, Times = 3 }
+        });
+        var monthly = await Handle(new CreateHabitCommand
+        {
+            Title = "Call home", Recurrence = new RecurrenceInput { Kind = ScheduleKind.TimesPerMonth, Times = 2 }
+        });
+
+        Assert.Equal(ScheduleKind.TimesPerWeek, weekly.Recurrence.Kind);
+        Assert.Equal(3, weekly.Recurrence.Times);
+        Assert.Null(weekly.Recurrence.Anchor);
+        Assert.Empty(weekly.Recurrence.Weekdays);
+        Assert.Equal(ScheduleKind.TimesPerMonth, monthly.Recurrence.Kind);
+        Assert.Equal(2, monthly.Recurrence.Times);
+        Assert.Equal([HabitSchedule.TimesPerWeek(3), HabitSchedule.TimesPerMonth(2)], _habits.Habits.Select(h => h.Schedule));
+    }
+
+    [Fact]
     public async Task TheClientsStartDateIsUsed_WhateverTheServerClockSays()
     {
         var dto = await Handle(new CreateHabitCommand { Title = "Read", StartDate = new DateOnly(2026, 11, 2) });
@@ -158,6 +179,14 @@ public class CreateHabitCommandHandlerTests
         await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
         {
             Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 32 }
+        }));
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
+        {
+            Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek, Times = 8 }
+        }));
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
+        {
+            Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.TimesPerMonth, Times = 29 }
         }));
 
         Assert.Empty(_habits.Habits);
@@ -226,6 +255,27 @@ public class UpdateHabitCommandHandlerTests
         Assert.Equal(HabitSchedule.MonthlyOnDate(1), habit.Schedule);
         Assert.Null(habit.Schedule.Anchor);
         Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task AnUpdate_MayTurnADueDayRuleIntoAQuota_AndBack()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Gym", schedule: HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10)));
+        _habits.Habits.Add(habit);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id, Title = "Gym", Recurrence = new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek, Times = 3 }
+        });
+        Assert.Equal(HabitSchedule.TimesPerWeek(3), habit.Schedule);
+        Assert.Null(habit.Schedule.Anchor);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id, Title = "Gym", Recurrence = Weekly(DayOfWeek.Friday)
+        });
+        Assert.Equal(HabitSchedule.Weekly([DayOfWeek.Friday]), habit.Schedule);
+        Assert.Null(habit.Schedule.Times);
     }
 
     [Fact]

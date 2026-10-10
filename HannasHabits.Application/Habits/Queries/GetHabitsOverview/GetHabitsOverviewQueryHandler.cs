@@ -36,17 +36,27 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
         var taggedDays = (await _tagQueries.GetTaggedDaysAsync(userId, from, to, cancellationToken))
             .ToLookup(row => row.HabitId);
 
-        return habits
-            .Select(habit => new HabitOverviewDto(
-                habit.Id,
-                habit.Title,
-                RecurrenceDto.From(habit.Schedule),
-                habit.StartDate,
-                HabitDueDays.Between(habit.Schedule, habit.StartDate, from, to),
-                habit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList(),
-                TaggedDaysOf(taggedDays[habit.Id]),
-                HabitStreak.Current(habit.Schedule, habit.StartDate, habit.CompletedDates.ToHashSet(), asOf)))
-            .ToList();
+        return habits.Select(habit => ToDto(habit, from, to, asOf, taggedDays[habit.Id])).ToList();
+    }
+
+    private static HabitOverviewDto ToDto(
+        HabitWithCompletedDates habit, DateOnly from, DateOnly to, DateOnly asOf, IEnumerable<TaggedDayRow> taggedDays)
+    {
+        // The whole history: the streak and a week that reaches out of the range need days outside it.
+        var completed = habit.CompletedDates.ToHashSet();
+
+        return new HabitOverviewDto(
+            habit.Id,
+            habit.Title,
+            RecurrenceDto.From(habit.Schedule),
+            habit.StartDate,
+            HabitDueDays.Between(habit.Schedule, habit.StartDate, from, to),
+            habit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList(),
+            TaggedDaysOf(taggedDays),
+            HabitQuota.Between(habit.Schedule, habit.StartDate, completed, from, to, asOf)
+                .Select(progress => new QuotaPeriodDto(progress.Period.From, progress.Period.To, progress.Done))
+                .ToList(),
+            HabitStreak.Current(habit.Schedule, habit.StartDate, completed, asOf));
     }
 
     // The rows come ordered by date and tag name; grouping keeps that order.

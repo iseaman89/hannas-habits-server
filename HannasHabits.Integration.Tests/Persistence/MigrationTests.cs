@@ -21,6 +21,7 @@ public class MigrationTests
     private const string AddResolutions = "20261008095909_AddResolutions";
     private const string AddHabitStartDate = "20261008100741_AddHabitStartDate";
     private const string SplitDisplayName = "20261009071927_SplitDisplayName";
+    private const string AddTags = "20261010112830_AddTags";
 
     private readonly TestEnvironment _environment;
 
@@ -244,6 +245,63 @@ public class MigrationTests
         Assert.Equal(HabitSchedule.Daily, habits[everyThreeDays]); // the rule did not survive the round trip, the days did
         Assert.Equal(HabitSchedule.Weekly([DayOfWeek.Saturday]), habits[lastSaturday]);
         Assert.Equal(HabitSchedule.Daily, habits[the15th]);
+    }
+
+    [Fact]
+    public async Task AddQuotaRules_LeavesEveryExistingHabitAsItWas_WithoutACount()
+    {
+        await using var db = await BlankDatabaseAsync();
+        await MigrateTo(db, AddTags);
+        var user = await Sql.InsertUserAsync(db);
+        Assert.False(await ColumnExistsAsync(db, "Habits", "ScheduleTimes"));
+
+        // Rows made with the schema before the quota: they must pass the widened check and read back unchanged.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Habits" ("Id", "CreatedAt", "UserId", "Title", "StartDate",
+                                  "ScheduleKind", "ScheduleWeekdays", "ScheduleInterval", "ScheduleAnchor")
+            VALUES ({Guid.NewGuid()}, {DateTime.UtcNow}, {user}, 'Every 3 days', {new DateOnly(2026, 3, 1)}, 1, 127, 3, {new DateOnly(2026, 3, 1)}),
+                   ({Guid.NewGuid()}, {DateTime.UtcNow}, {user}, 'Mondays', {new DateOnly(2026, 3, 1)}, 0, 2, 1, NULL)
+            """);
+
+        await MigrateTo(db);
+
+        Assert.True(await ColumnExistsAsync(db, "Habits", "ScheduleTimes"));
+        var habits = await db.Habits.AsNoTracking().ToListAsync();
+        Assert.Equal(2, habits.Count);
+        Assert.All(habits, habit => Assert.Null(habit.Schedule.Times));
+        Assert.Equal(HabitSchedule.EveryNDays(3, new DateOnly(2026, 3, 1)), habits.Single(h => h.Title.Value == "Every 3 days").Schedule);
+        Assert.Equal(HabitSchedule.Weekly([DayOfWeek.Monday]), habits.Single(h => h.Title.Value == "Mondays").Schedule);
+    }
+
+    [Fact]
+    public async Task AddQuotaRules_CanBeRolledBackAndAppliedAgain_AQuotaBecomesADailyHabit()
+    {
+        await using var db = await BlankDatabaseAsync();
+        await MigrateTo(db);
+        var user = await Sql.InsertUserAsync(db);
+        var perWeek = await Sql.InsertHabitAsync(db, user, schedule: 127, kind: 4, times: 3);
+        var perMonth = await Sql.InsertHabitAsync(db, user, schedule: 127, kind: 5, times: 8);
+        var weekly = await Sql.InsertHabitAsync(db, user, schedule: 62);
+
+        await MigrateTo(db, AddTags);
+
+        // The old schema has no quota: both are "every day" now, the count is gone, the other habit is untouched.
+        Assert.False(await ColumnExistsAsync(db, "Habits", "ScheduleTimes"));
+        async Task<long> Kind(Guid id) => await Sql.ScalarAsync(db, "SELECT \"ScheduleKind\" FROM \"Habits\" WHERE \"Id\" = @p0", id);
+        async Task<long> Mask(Guid id) => await Sql.ScalarAsync(db, "SELECT \"ScheduleWeekdays\" FROM \"Habits\" WHERE \"Id\" = @p0", id);
+        Assert.Equal((0, 127), (await Kind(perWeek), await Mask(perWeek)));
+        Assert.Equal((0, 127), (await Kind(perMonth), await Mask(perMonth)));
+        Assert.Equal((0, 62), (await Kind(weekly), await Mask(weekly)));
+        var rejected = await Sql.RejectedAsync(() => db.Database.ExecuteSqlRawAsync(
+            "UPDATE \"Habits\" SET \"ScheduleKind\" = 4 WHERE \"Id\" = {0}", weekly));
+        Assert.Equal("CK_Habits_ScheduleRule", rejected.ConstraintName); // the narrower check is back
+
+        await MigrateTo(db);
+
+        var habits = await db.Habits.AsNoTracking().ToDictionaryAsync(h => h.Id, h => h.Schedule);
+        Assert.Equal(HabitSchedule.Daily, habits[perWeek]);
+        Assert.Equal(HabitSchedule.Daily, habits[perMonth]);
+        Assert.Equal(HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]), habits[weekly]);
     }
 
     [Fact]

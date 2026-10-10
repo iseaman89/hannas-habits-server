@@ -64,6 +64,8 @@ Content-Type: application/json
 #   everyNDays        interval (2..365), counted from anchor
 #   monthlyOnWeekday  occurrence (first | second | third | fourth | last) + weekday
 #   monthlyOnDate     dayOfMonth (1..31; a month without that date uses its last day)
+#   timesPerWeek      times (1..7) in every calendar week (Monday to Sunday), on any days - no due day
+#   timesPerMonth     times (1..28) in every calendar month, on any days - no due day
 # anchor = the day the rhythm counts from (every N weeks with N > 1, every N days); omitted = the start date.
 # startDate = first day the habit applies (yyyy-MM-dd, your local date; 2000-01-01 .. 2100-12-31); omit it for "today".
 POST {{host}}/api/habits
@@ -113,6 +115,15 @@ Content-Type: application/json
 
 { "title": "Water the plants", "recurrence": { "kind": "everyNDays", "interval": 3 } }
 
+### Create a habit with a quota: 3 times a week, on any days - 201
+# No day is due: any day can be ticked and counts. The overview's quotaPeriods say how far each week is, and the streak
+# counts the weeks (timesPerMonth: months) that reached the count.
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Go to the gym", "recurrence": { "kind": "timesPerWeek", "times": 3 } }
+
 ### List habits
 GET {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
@@ -122,6 +133,9 @@ Authorization: Bearer {{accessToken}}
 # the habit is due on: the rule applied, none before startDate), the completed days between from and to (inclusive,
 # both required, at most 366 days apart, oldest first) and currentStreak as of asOf (= your local today; omitted =
 # the server's UTC date). The streak counts due days in a row back from asOf, independent of from/to (it can span months).
+# For a quota rule (timesPerWeek / timesPerMonth) every day from startDate is listed in scheduledDates (any day can be
+# ticked), quotaPeriods lists each week/month that touches the range as { from, to, done } - counted over the whole
+# period - and the streak counts weeks/months in a row that reached the count (the running one is skipped while open).
 GET {{host}}/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf={{date}}
 Authorization: Bearer {{accessToken}}
 

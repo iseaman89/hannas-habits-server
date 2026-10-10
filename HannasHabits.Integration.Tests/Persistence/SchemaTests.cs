@@ -46,7 +46,8 @@ public class SchemaTests : IAsyncLifetime
             Assert.Equal(("23514", "CK_Habits_ScheduleWeekdays"), Describe(await Sql.RejectedAsync(insert)));
     }
 
-    // The kinds of schedule (0 weekly, 1 every N days, 2 monthly on a weekday, 3 monthly on a date) and the facts each
+    // The kinds of schedule (0 weekly, 1 every N days, 2 monthly on a weekday, 3 monthly on a date; the quotas 4 and 5
+    // follow below) and the facts each
     // one has: a row that says "every 3 days" without a day to count from means nothing and is refused.
     [Theory]
     [InlineData(0, 62, 1, null, null, null)]                    // weekly, every week (Monday to Friday)
@@ -68,7 +69,7 @@ public class SchemaTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(4, 127, 1, null, null, null)]                   // no such kind
+    [InlineData(6, 127, 1, null, null, null)]                   // no such kind
     [InlineData(-1, 127, 1, null, null, null)]
     [InlineData(0, 62, 0, null, null, null)]                    // weekly: interval 0
     [InlineData(0, 62, 53, "2026-10-05", null, null)]           // ... more than a year of weeks
@@ -97,6 +98,43 @@ public class SchemaTests : IAsyncLifetime
         var insert = () => Sql.InsertHabitAsync(
             _db, _user, schedule: weekdays, kind: kind, interval: interval, anchor: anchor, occurrence: occurrence,
             dayOfMonth: dayOfMonth);
+
+        Assert.Equal(("23514", "CK_Habits_ScheduleRule"), Describe(await Sql.RejectedAsync(insert)));
+    }
+
+    // The two quota kinds (4 times a week, 5 times a month) are all weekdays with a count and none of the other facts.
+    [Theory]
+    [InlineData(4, 1)]
+    [InlineData(4, 7)]                                          // every day of the week
+    [InlineData(5, 1)]
+    [InlineData(5, 28)]                                         // what February can always reach
+    public async Task Habits_AQuotaIsAcceptedWithItsCount(int kind, int times)
+    {
+        await Sql.InsertHabitAsync(_db, _user, schedule: 127, kind: kind, times: times);
+    }
+
+    [Theory]
+    [InlineData(4, 127, 1, null, null, null, null)]             // times a week without a count
+    [InlineData(4, 127, 1, null, null, null, 0)]                // ... 0
+    [InlineData(4, 127, 1, null, null, null, 8)]                // ... more than seven in a week
+    [InlineData(5, 127, 1, null, null, null, null)]             // times a month without a count
+    [InlineData(5, 127, 1, null, null, null, 0)]
+    [InlineData(5, 127, 1, null, null, null, 29)]               // ... more than a month can always hold
+    [InlineData(4, 62, 1, null, null, null, 3)]                 // ... that depends on a weekday
+    [InlineData(4, 127, 2, null, null, null, 3)]                // ... with an interval
+    [InlineData(4, 127, 1, "2026-10-05", null, null, 3)]        // ... with an anchor
+    [InlineData(5, 127, 1, null, 1, null, 3)]                   // ... with an occurrence
+    [InlineData(5, 127, 1, null, null, 15, 3)]                  // ... with a day of the month
+    [InlineData(0, 62, 1, null, null, null, 3)]                 // a count on a weekly rule
+    [InlineData(1, 127, 3, "2026-10-10", null, null, 3)]        // ... on every N days
+    [InlineData(2, 64, 1, null, 5, null, 3)]                    // ... on monthly on a weekday
+    [InlineData(3, 127, 1, null, null, 15, 3)]                  // ... on monthly on a date
+    public async Task Habits_ACountBelongsToTheQuotaKindsOnly_AndStaysInTheirLimits(
+        int kind, int weekdays, int interval, string? anchor, int? occurrence, int? dayOfMonth, int? times)
+    {
+        var insert = () => Sql.InsertHabitAsync(
+            _db, _user, schedule: weekdays, kind: kind, interval: interval, anchor: anchor, occurrence: occurrence,
+            dayOfMonth: dayOfMonth, times: times);
 
         Assert.Equal(("23514", "CK_Habits_ScheduleRule"), Describe(await Sql.RejectedAsync(insert)));
     }

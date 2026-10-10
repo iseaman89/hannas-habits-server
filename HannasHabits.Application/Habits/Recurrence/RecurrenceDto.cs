@@ -6,6 +6,8 @@ namespace HannasHabits.Application.Habits.Recurrence;
 /// <summary>
 /// The rule that decides on which days a habit is due, as the API shows it. Flat on purpose: <c>kind</c> says which of
 /// the other fields apply, the rest is empty (<c>weekdays</c> = <c>[]</c>, the others <c>null</c>, <c>interval</c> = 1).
+/// A quota (<see cref="ScheduleKind.TimesPerWeek"/>, <see cref="ScheduleKind.TimesPerMonth"/>) has no due day: it is
+/// <c>times</c> in every week or month, on any days.
 /// </summary>
 /// <param name="Kind">Which rule this is.</param>
 /// <param name="Weekdays">
@@ -25,6 +27,10 @@ namespace HannasHabits.Application.Habits.Recurrence;
 /// <param name="DayOfMonth">
 /// <see cref="ScheduleKind.MonthlyOnDate"/>: 1..31; a month without that date uses its last day. <c>null</c> otherwise.
 /// </param>
+/// <param name="Times">
+/// <see cref="ScheduleKind.TimesPerWeek"/>: 1..7 times in every week (Monday to Sunday).
+/// <see cref="ScheduleKind.TimesPerMonth"/>: 1..28 times in every calendar month. <c>null</c> otherwise.
+/// </param>
 public record RecurrenceDto(
     ScheduleKind Kind,
     IReadOnlyList<DayOfWeek> Weekdays,
@@ -32,21 +38,25 @@ public record RecurrenceDto(
     DateOnly? Anchor,
     WeekdayOccurrence? Occurrence,
     DayOfWeek? Weekday,
-    int? DayOfMonth)
+    int? DayOfMonth,
+    int? Times)
 {
     public static RecurrenceDto From(HabitSchedule schedule) => schedule.Kind switch
     {
         ScheduleKind.Weekly => new RecurrenceDto(
-            schedule.Kind, schedule.Days, schedule.Interval, schedule.Anchor, null, null, null),
+            schedule.Kind, schedule.Days, schedule.Interval, schedule.Anchor, null, null, null, null),
 
         ScheduleKind.EveryNDays => new RecurrenceDto(
-            schedule.Kind, [], schedule.Interval, schedule.Anchor, null, null, null),
+            schedule.Kind, [], schedule.Interval, schedule.Anchor, null, null, null, null),
 
         ScheduleKind.MonthlyOnWeekday => new RecurrenceDto(
-            schedule.Kind, [], schedule.Interval, null, schedule.Occurrence, schedule.Days.Single(), null),
+            schedule.Kind, [], schedule.Interval, null, schedule.Occurrence, schedule.Days.Single(), null, null),
 
         ScheduleKind.MonthlyOnDate => new RecurrenceDto(
-            schedule.Kind, [], schedule.Interval, null, null, null, schedule.DayOfMonth),
+            schedule.Kind, [], schedule.Interval, null, null, null, schedule.DayOfMonth, null),
+
+        ScheduleKind.TimesPerWeek or ScheduleKind.TimesPerMonth => new RecurrenceDto(
+            schedule.Kind, [], schedule.Interval, null, null, null, null, schedule.Times),
 
         _ => throw new InvalidOperationException($"Unknown schedule kind '{schedule.Kind}'.")
     };

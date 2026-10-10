@@ -15,6 +15,7 @@ public static class HabitScheduleColumns
     public const string Anchor = "ScheduleAnchor";
     public const string Occurrence = "ScheduleOccurrence";
     public const string DayOfMonth = "ScheduleDayOfMonth";
+    public const string Times = "ScheduleTimes";
 
     /// <summary>At least one day, all seven at most.</summary>
     public static string WeekdaysCheck => $"\"{Weekdays}\" BETWEEN 1 AND {HabitSchedule.AllDaysMask}";
@@ -30,7 +31,9 @@ public static class HabitScheduleColumns
     /// <item>every N days: all weekdays, N days, an anchor</item>
     /// <item>monthly on a weekday: exactly one weekday and an occurrence</item>
     /// <item>monthly on a date: all weekdays and a day of the month</item>
+    /// <item>times a week / times a month: all weekdays and a count (1..7 / 1..28)</item>
     /// </list>
+    /// The count belongs to the two quota kinds only.
     /// </summary>
     public static string RuleCheck
     {
@@ -42,19 +45,28 @@ public static class HabitScheduleColumns
             var anchor = $"\"{Anchor}\"";
             var occurrence = $"\"{Occurrence}\"";
             var dayOfMonth = $"\"{DayOfMonth}\"";
+            var times = $"\"{Times}\"";
 
             return
                 $"({kind} = {(int)ScheduleKind.Weekly} AND {interval} BETWEEN 1 AND {HabitSchedule.MaxWeekInterval}" +
-                $" AND (({interval} = 1) = ({anchor} IS NULL)) AND {occurrence} IS NULL AND {dayOfMonth} IS NULL)" +
+                $" AND (({interval} = 1) = ({anchor} IS NULL)) AND {occurrence} IS NULL AND {dayOfMonth} IS NULL" +
+                $" AND {times} IS NULL)" +
                 $" OR ({kind} = {(int)ScheduleKind.EveryNDays} AND {weekdays} = {HabitSchedule.AllDaysMask}" +
                 $" AND {interval} BETWEEN {HabitSchedule.MinDayInterval} AND {HabitSchedule.MaxDayInterval}" +
-                $" AND {anchor} IS NOT NULL AND {occurrence} IS NULL AND {dayOfMonth} IS NULL)" +
+                $" AND {anchor} IS NOT NULL AND {occurrence} IS NULL AND {dayOfMonth} IS NULL AND {times} IS NULL)" +
                 $" OR ({kind} = {(int)ScheduleKind.MonthlyOnWeekday} AND ({weekdays} & ({weekdays} - 1)) = 0" +
                 $" AND {interval} = 1 AND {anchor} IS NULL AND {occurrence} IS NOT NULL AND {occurrence} BETWEEN 1 AND 5" +
-                $" AND {dayOfMonth} IS NULL)" +
+                $" AND {dayOfMonth} IS NULL AND {times} IS NULL)" +
                 $" OR ({kind} = {(int)ScheduleKind.MonthlyOnDate} AND {weekdays} = {HabitSchedule.AllDaysMask}" +
                 $" AND {interval} = 1 AND {anchor} IS NULL AND {occurrence} IS NULL" +
-                $" AND {dayOfMonth} IS NOT NULL AND {dayOfMonth} BETWEEN 1 AND {HabitSchedule.MaxDayOfMonth})";
+                $" AND {dayOfMonth} IS NOT NULL AND {dayOfMonth} BETWEEN 1 AND {HabitSchedule.MaxDayOfMonth}" +
+                $" AND {times} IS NULL)" +
+                $" OR ({kind} = {(int)ScheduleKind.TimesPerWeek} AND {weekdays} = {HabitSchedule.AllDaysMask}" +
+                $" AND {interval} = 1 AND {anchor} IS NULL AND {occurrence} IS NULL AND {dayOfMonth} IS NULL" +
+                $" AND {times} IS NOT NULL AND {times} BETWEEN 1 AND {HabitSchedule.MaxTimesPerWeek})" +
+                $" OR ({kind} = {(int)ScheduleKind.TimesPerMonth} AND {weekdays} = {HabitSchedule.AllDaysMask}" +
+                $" AND {interval} = 1 AND {anchor} IS NULL AND {occurrence} IS NULL AND {dayOfMonth} IS NULL" +
+                $" AND {times} IS NOT NULL AND {times} BETWEEN 1 AND {HabitSchedule.MaxTimesPerMonth})";
         }
     }
 }

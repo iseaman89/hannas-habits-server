@@ -71,7 +71,7 @@ public class OpenApiContractTests
 
         // Every fact is always there (required); the ones that belong to one kind only are null for the others.
         Assert.Equal(
-            ["anchor", "dayOfMonth", "interval", "kind", "occurrence", "weekday", "weekdays"],
+            ["anchor", "dayOfMonth", "interval", "kind", "occurrence", "times", "weekday", "weekdays"],
             recurrence.GetProperty("required").EnumerateArray().Select(name => name.GetString()!).Order());
         Assert.False(IsNullable("kind"));
         Assert.False(IsNullable("weekdays"));
@@ -80,6 +80,7 @@ public class OpenApiContractTests
         Assert.True(IsNullable("occurrence"));
         Assert.True(IsNullable("weekday"));
         Assert.True(IsNullable("dayOfMonth"));
+        Assert.True(IsNullable("times"));
     }
 
     [Fact]
@@ -90,7 +91,9 @@ public class OpenApiContractTests
 
         string[] Values(string schema) => schemas.GetProperty(schema).GetProperty("enum").EnumerateArray().Select(v => v.ToString()).ToArray();
 
-        Assert.Equal(["weekly", "everyNDays", "monthlyOnWeekday", "monthlyOnDate"], Values("ScheduleKind"));
+        Assert.Equal(
+            ["weekly", "everyNDays", "monthlyOnWeekday", "monthlyOnDate", "timesPerWeek", "timesPerMonth"],
+            Values("ScheduleKind"));
         Assert.Equal(["first", "second", "third", "fourth", "last"], Values("WeekdayOccurrence"));
         Assert.Equal("string", schemas.GetProperty("ScheduleKind").GetProperty("type").GetString());
         // The contract of every other enum is untouched: a day of the week and a mood are numbers.

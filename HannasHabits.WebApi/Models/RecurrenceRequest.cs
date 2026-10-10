@@ -10,7 +10,9 @@ namespace HannasHabits.WebApi.Models;
 /// <param name="Kind">
 /// <c>weekly</c> (needs <c>weekdays</c>; <c>interval</c> = every N weeks, omitted = every week) · <c>everyNDays</c>
 /// (needs <c>interval</c> 2..365) · <c>monthlyOnWeekday</c> (needs <c>occurrence</c> and <c>weekday</c>) ·
-/// <c>monthlyOnDate</c> (needs <c>dayOfMonth</c>).
+/// <c>monthlyOnDate</c> (needs <c>dayOfMonth</c>) · <c>timesPerWeek</c> (needs <c>times</c> 1..7) ·
+/// <c>timesPerMonth</c> (needs <c>times</c> 1..28). The last two have no due day: any day counts towards the N, and the
+/// streak counts the weeks or months that reached it.
 /// </param>
 /// <param name="Weekdays">Weekly: the chosen days (0 = Sunday ... 6 = Saturday).</param>
 /// <param name="Interval">Weekly: every N weeks, 1..52. Every N days: N, 2..365.</param>
@@ -21,6 +23,7 @@ namespace HannasHabits.WebApi.Models;
 /// <param name="Occurrence">Monthly on a weekday: <c>first</c>, <c>second</c>, <c>third</c>, <c>fourth</c> or <c>last</c>.</param>
 /// <param name="Weekday">Monthly on a weekday: the weekday (0 = Sunday ... 6 = Saturday).</param>
 /// <param name="DayOfMonth">Monthly on a date: 1..31; a month without that date uses its last day.</param>
+/// <param name="Times">Times a week (1..7, weeks run Monday to Sunday) or times a month (1..28).</param>
 public record RecurrenceRequest(
     ScheduleKind? Kind,
     List<DayOfWeek>? Weekdays,
@@ -28,7 +31,8 @@ public record RecurrenceRequest(
     DateOnly? Anchor,
     WeekdayOccurrence? Occurrence,
     DayOfWeek? Weekday,
-    int? DayOfMonth)
+    int? DayOfMonth,
+    int? Times)
 {
     public RecurrenceInput ToInput() => new()
     {
@@ -38,6 +42,7 @@ public record RecurrenceRequest(
         Anchor = Anchor,
         Occurrence = Occurrence,
         Weekday = Weekday,
-        DayOfMonth = DayOfMonth
+        DayOfMonth = DayOfMonth,
+        Times = Times
     };
 }

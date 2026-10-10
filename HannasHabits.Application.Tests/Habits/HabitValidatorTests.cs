@@ -211,6 +211,8 @@ public class RecurrenceInputValidatorTests
         _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Occurrence = WeekdayOccurrence.Last, Weekday = DayOfWeek.Saturday })
             .ShouldNotHaveAnyValidationErrors();
         _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 31 }).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek, Times = 3 }).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerMonth, Times = 8 }).ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
@@ -293,6 +295,51 @@ public class RecurrenceInputValidatorTests
             result.ShouldHaveValidationErrorFor(x => x.DayOfMonth);
 
         _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate }).ShouldHaveValidationErrorFor(x => x.DayOfMonth);
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(7, true)]
+    [InlineData(0, false)]
+    [InlineData(8, false)]
+    [InlineData(-3, false)]
+    public void TimesPerWeek_TheCountIsRequired_AndBetween1And7(int times, bool valid)
+    {
+        var result = _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek, Times = times });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Times);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Times);
+
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerWeek }).ShouldHaveValidationErrorFor(x => x.Times);
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(28, true)]
+    [InlineData(0, false)]
+    [InlineData(29, false)]
+    [InlineData(31, false)]
+    public void TimesPerMonth_TheCountIsRequired_AndBetween1And28(int times, bool valid)
+    {
+        var result = _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerMonth, Times = times });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Times);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Times);
+
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.TimesPerMonth }).ShouldHaveValidationErrorFor(x => x.Times);
+    }
+
+    [Fact]
+    public void TheCount_IsNotCheckedForAKindThatHasNoCount()
+    {
+        // The limits of the two quota kinds differ; a leftover count on another kind is ignored, not an error.
+        var input = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15, Times = 400 };
+
+        _validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
     }
 
     [Theory]
