@@ -418,4 +418,134 @@ public class RepositoryTests : IAsyncLifetime
 
         Assert.Equal(0, await Sql.CountAsync(_db, "Resolutions", "Id", resolution.Id));
     }
+
+    // ---- tags and tagged days ----
+
+    [Fact]
+    public async Task ATag_RoundTripsThroughTheDatabase_WithItsNameAndItsKey()
+    {
+        var tag = Tag.Create(_user, TagName.Create("Krank"), tagsOfUser: 0);
+        new TagRepository(_db).Add(tag);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        await using var other = FreshContext();
+        var loaded = await new TagRepository(other).GetByIdAsync(_user, tag.Id, default);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Krank", loaded.Name.Value);
+        Assert.Equal("KRANK", loaded.NameKey);
+    }
+
+    [Fact]
+    public async Task ATag_IsFoundByName_IgnoringCase_AndOnlyForItsOwner()
+    {
+        var tag = Tag.Create(_user, TagName.Create("Krank"), 0);
+        var repository = new TagRepository(_db);
+        repository.Add(tag);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        Assert.Equal(tag.Id, (await repository.FindByNameAsync(_user, TagName.Create("kRANK"), default))!.Id);
+        Assert.Null(await repository.FindByNameAsync(_user, TagName.Create("Urlaub"), default));
+        Assert.Null(await repository.FindByNameAsync(Guid.NewGuid(), TagName.Create("Krank"), default));
+        Assert.Null(await repository.GetByIdAsync(Guid.NewGuid(), tag.Id, default));
+        Assert.Equal(1, await repository.CountAsync(_user, default));
+        Assert.Equal(0, await repository.CountAsync(Guid.NewGuid(), default));
+    }
+
+    [Fact]
+    public async Task RenamingATag_ChangesTheSpelling_AndTheKeyTogether()
+    {
+        var tag = Tag.Create(_user, TagName.Create("krank"), 0);
+        new TagRepository(_db).Add(tag);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        await using (var editing = FreshContext())
+        {
+            var loaded = (await new TagRepository(editing).GetByIdAsync(_user, tag.Id, default))!;
+            loaded.Rename(TagName.Create("Krank")); // only the case: must still be written
+            await ((IUnitOfWork)editing).SaveChangesAsync();
+        }
+
+        await using var check = FreshContext();
+        var stored = await check.Tags.AsNoTracking().SingleAsync(t => t.Id == tag.Id);
+        Assert.Equal("Krank", stored.Name.Value);
+        Assert.Equal("KRANK", stored.NameKey);
+    }
+
+    [Fact]
+    public async Task ADayEntry_KeepsItsTags_AndLoadsThemWithItself()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var sick = Tag.Create(_user, TagName.Create("krank"), 0);
+        var holiday = Tag.Create(_user, TagName.Create("Urlaub"), 0);
+        var tags = new TagRepository(_db);
+        tags.Add(sick);
+        tags.Add(holiday);
+
+        var entry = HabitDayEntry.Create(habit, new DateOnly(2026, 10, 8));
+        entry.AddTag(sick.Id);
+        entry.AddTag(holiday.Id);
+        new HabitDayEntryRepository(_db).Add(entry);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        await using var other = FreshContext();
+        var loaded = await new HabitDayEntryRepository(other).GetAsync(_user, habit, new DateOnly(2026, 10, 8), default);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(entry.Id, loaded.Id);
+        Assert.Equal(new[] { sick.Id, holiday.Id }.Order(), loaded.Tags.Select(t => t.TagId).Order());
+    }
+
+    [Fact]
+    public async Task ADayEntry_IsHandedOutOnlyToTheOwnerOfItsHabit()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var tag = await Sql.InsertTagAsync(_db, _user);
+        var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+        await Sql.InsertDayTagAsync(_db, entry, tag);
+        var repository = new HabitDayEntryRepository(_db);
+        var stranger = Guid.NewGuid();
+
+        Assert.NotNull(await repository.GetAsync(_user, habit, new DateOnly(2026, 10, 8), default));
+        Assert.Null(await repository.GetAsync(stranger, habit, new DateOnly(2026, 10, 8), default));
+        Assert.Single(await repository.GetWithTagAsync(_user, tag, default));
+        Assert.Empty(await repository.GetWithTagAsync(stranger, tag, default));
+    }
+
+    [Fact]
+    public async Task GettingTheEntriesOfATag_LoadsAllTheirTags_NotOnlyThatOne()
+    {
+        // A merge or a delete works through the whole aggregate: the entry must know its other tags (the limit, the
+        // "already there" check).
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var sick = await Sql.InsertTagAsync(_db, _user, "krank");
+        var holiday = await Sql.InsertTagAsync(_db, _user, "Urlaub");
+        var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+        await Sql.InsertDayTagAsync(_db, entry, sick);
+        await Sql.InsertDayTagAsync(_db, entry, holiday);
+        await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, habit, "2026-10-09"), holiday);
+
+        var entries = await new HabitDayEntryRepository(_db).GetWithTagAsync(_user, sick, default);
+
+        var found = Assert.Single(entries);
+        Assert.Equal(2, found.Tags.Count);
+    }
+
+    [Fact]
+    public async Task RemovingTheLastTagOfAnEntryAndTheEntry_LeavesNothingBehind()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var tag = await Sql.InsertTagAsync(_db, _user);
+        await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08"), tag);
+        var repository = new HabitDayEntryRepository(_db);
+
+        var entry = (await repository.GetAsync(_user, habit, new DateOnly(2026, 10, 8), default))!;
+        entry.RemoveTag(tag);
+        repository.Remove(entry);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitDayEntries", "HabitId", habit));
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitDayTags", "TagId", tag));
+        Assert.Equal(1, await Sql.CountAsync(_db, "Tags", "Id", tag));
+    }
 }

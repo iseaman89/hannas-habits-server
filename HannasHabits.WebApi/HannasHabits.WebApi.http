@@ -117,7 +117,7 @@ Content-Type: application/json
 GET {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
 
-### Habit overview for the month grid / the "today" panel - 200
+### Habit overview for the month grid / the "today" panel - 200 (each habit also carries taggedDays: [{ date, tags }] of the range)
 # One call instead of 1 + N: per habit its recurrence rule, startDate, scheduledDates (the days between from and to
 # the habit is due on: the rule applied, none before startDate), the completed days between from and to (inclusive,
 # both required, at most 366 days apart, oldest first) and currentStreak as of asOf (= your local today; omitted =
@@ -151,6 +151,44 @@ Authorization: Bearer {{accessToken}}
 
 ### Unmark a day - 204 (404 if the day was not marked)
 DELETE {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Create a tag - 201 with { id, name }. Idempotent by name, ignoring case: an existing tag answers 200 with that tag.
+# A tag belongs to the user, not to a habit; at most 200 per user, name at most 30 characters (trimmed).
+POST {{host}}/api/tags
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "krank" }
+
+> {%
+    client.global.set("tagId", response.body.id);
+%}
+
+### List the tags with their use - 200 [{ id, name, useCount, habitUseCount, lastUsedOn }]
+# With habitId the habit's own days come first (for suggestions while typing); habitUseCount is 0 without it.
+GET {{host}}/api/tags?habitId={{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Put the tag on a day of the habit - 200 with the day's tags { date, tags: [{ id, name }] }. Idempotent; at most 10 per day.
+# Independent of the completion mark: a missed day can be tagged.
+PUT {{host}}/api/habits/{{habitId}}/days/{{date}}/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+
+### Take the tag off the day - 200 with the day's tags. Idempotent: a tag the day does not have is no error.
+DELETE {{host}}/api/habits/{{habitId}}/days/{{date}}/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+
+### Rename a tag - 200 { id, name, merged }. A name another tag already has (ignoring case) MERGES the two:
+### the days go to the other tag, this tag is gone, merged = true and id is the surviving tag's id.
+PUT {{host}}/api/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "Erkältet" }
+
+### Delete a tag - 200 { removedFromDays }; it comes off every day it was on (a day that held only this tag is gone).
+DELETE {{host}}/api/tags/{{tagId}}
 Authorization: Bearer {{accessToken}}
 
 ### Delete the habit (its records go with it) - 204

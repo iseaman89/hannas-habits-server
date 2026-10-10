@@ -25,4 +25,18 @@ internal static class Make
 
     public static Resolution NewResolution(Guid userId, int year = 2026, string title = "Read 12 books", Guid? habitId = null)
         => Resolution.Create(userId, year, title, habitId, resolutionsInYear: 0);
+
+    public static Tag NewTag(Guid userId, string name = "krank")
+        => Tag.Create(userId, TagName.Create(name), tagsOfUser: 0);
+
+    /// <summary>A day entry that already carries the given tags.</summary>
+    public static HabitDayEntry NewDay(Guid habitId, DateOnly date, params Tag[] tags)
+    {
+        var entry = HabitDayEntry.Create(habitId, date);
+
+        foreach (var tag in tags)
+            entry.AddTag(tag.Id);
+
+        return entry;
+    }
 }

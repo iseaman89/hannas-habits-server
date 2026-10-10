@@ -3,7 +3,9 @@ using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Application.Tags;
 using HannasHabits.Application.Tests.Fakes;
+using HannasHabits.Domain.Entities;
 using HannasHabits.Domain.Enums;
 using HannasHabits.Domain.ValueObjects;
 using Microsoft.Extensions.Time.Testing;
@@ -73,10 +75,19 @@ public class GetHabitsOverviewQueryHandlerTests
 
     private readonly FakeCurrentUser _user = new();
     private readonly FakeHabitRepository _repository = new();
+    private readonly FakeTagRepository _tags = new();
+    private readonly FakeHabitDayEntryRepository _days;
     private readonly FakeTimeProvider _clock = TestClock.Create();
 
+    public GetHabitsOverviewQueryHandlerTests()
+    {
+        _days = new FakeHabitDayEntryRepository(_repository);
+    }
+
+    private FakeTagQueries TagQueries() => new(_repository, _tags, _days);
+
     private Task<List<HabitOverviewDto>> Handle(DateOnly? from, DateOnly? to, DateOnly? asOf = null)
-        => new GetHabitsOverviewQueryHandler(new FakeHabitQueries(_repository), _user, _clock)
+        => new GetHabitsOverviewQueryHandler(new FakeHabitQueries(_repository), TagQueries(), _user, _clock)
             .Handle(new GetHabitsOverviewQuery(from, to, asOf), CancellationToken.None);
 
     private static DateOnly[] Days(int month, params int[] days) => days.Select(d => new DateOnly(2026, month, d)).ToArray();
@@ -246,9 +257,86 @@ public class GetHabitsOverviewQueryHandlerTests
     public async Task OnlyTheCurrentUserIsAskedFor()
     {
         var queries = new FakeHabitQueries(_repository);
-        await new GetHabitsOverviewQueryHandler(queries, _user, _clock)
+        var tagQueries = TagQueries();
+        await new GetHabitsOverviewQueryHandler(queries, tagQueries, _user, _clock)
             .Handle(new GetHabitsOverviewQuery(Today, Today, null), CancellationToken.None);
 
         Assert.Equal([_user.UserId], queries.AskedForUsers);
+        Assert.Equal([_user.UserId], tagQueries.AskedForUsers);
+    }
+
+    // ---- tags ----
+
+    private (Habit Habit, Tag Sick, Tag Holiday) HabitWithTags()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Run", new DateOnly(2026, 1, 1));
+        _repository.Habits.Add(habit);
+
+        var sick = Make.NewTag(_user.UserId, "krank");
+        var holiday = Make.NewTag(_user.UserId, "Urlaub");
+        _tags.Tags.AddRange([sick, holiday]);
+
+        return (habit, sick, holiday);
+    }
+
+    [Fact]
+    public async Task CarriesTheTaggedDaysOfTheRange_OldestFirst_EachWithItsTagsByName()
+    {
+        var (habit, sick, holiday) = HabitWithTags();
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 10, 7), holiday, sick));
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 10, 2), sick));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Collection(item.TaggedDays,
+            day =>
+            {
+                Assert.Equal(new DateOnly(2026, 10, 2), day.Date);
+                Assert.Equal([new TagSummaryDto(sick.Id, "krank")], day.Tags);
+            },
+            day =>
+            {
+                Assert.Equal(new DateOnly(2026, 10, 7), day.Date);
+                Assert.Equal([new TagSummaryDto(sick.Id, "krank"), new TagSummaryDto(holiday.Id, "Urlaub")], day.Tags);
+            });
+    }
+
+    [Fact]
+    public async Task TheTagsOfADayOutsideTheRange_AreNotCarried()
+    {
+        var (habit, sick, _) = HabitWithTags();
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 9, 30), sick));
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 11, 1), sick));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Empty(item.TaggedDays);
+    }
+
+    [Fact]
+    public async Task EveryHabitGetsOnlyItsOwnTaggedDays()
+    {
+        var (habit, sick, _) = HabitWithTags();
+        var other = Make.NewHabit(_user.UserId, "Read", new DateOnly(2026, 1, 1));
+        _repository.Habits.Add(other);
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 10, 2), sick));
+
+        var overview = await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31));
+
+        Assert.Single(overview.Single(i => i.Id == habit.Id).TaggedDays);
+        Assert.Empty(overview.Single(i => i.Id == other.Id).TaggedDays);
+    }
+
+    [Fact]
+    public async Task AMissedDay_CanCarryTags()
+    {
+        // Tags are independent of the completion mark: that is what "krank" is for.
+        var (habit, sick, _) = HabitWithTags();
+        _days.Entries.Add(Make.NewDay(habit.Id, new DateOnly(2026, 10, 5), sick));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Empty(item.CompletedDates);
+        Assert.Equal(new DateOnly(2026, 10, 5), Assert.Single(item.TaggedDays).Date);
     }
 }

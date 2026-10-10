@@ -16,6 +16,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     public DbSet<HabitRecord> HabitRecords => Set<HabitRecord>();
     public DbSet<DailyDiary> DailyDiaries => Set<DailyDiary>();
     public DbSet<Resolution> Resolutions => Set<Resolution>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<HabitDayEntry> HabitDayEntries => Set<HabitDayEntry>();
+    public DbSet<HabitDayTag> HabitDayTags => Set<HabitDayTag>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }

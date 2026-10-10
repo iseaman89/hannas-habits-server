@@ -213,6 +213,19 @@ public class SchemaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ATag_NeedsItsOwner_ADayEntryItsHabit_AndATaggedDayItsEntryAndItsTag()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+        var tag = await Sql.InsertTagAsync(_db, _user);
+
+        Assert.Equal(SqlState.ForeignKeyViolation, (await Sql.RejectedAsync(() => Sql.InsertTagAsync(_db, Guid.NewGuid()))).SqlState);
+        Assert.Equal(SqlState.ForeignKeyViolation, (await Sql.RejectedAsync(() => Sql.InsertDayEntryAsync(_db, Guid.NewGuid(), "2026-10-08"))).SqlState);
+        Assert.Equal(SqlState.ForeignKeyViolation, (await Sql.RejectedAsync(() => Sql.InsertDayTagAsync(_db, Guid.NewGuid(), tag))).SqlState);
+        Assert.Equal(SqlState.ForeignKeyViolation, (await Sql.RejectedAsync(() => Sql.InsertDayTagAsync(_db, entry, Guid.NewGuid()))).SqlState);
+    }
+
+    [Fact]
     public async Task ARecord_NeedsItsHabit_AndAResolutionNeedsAnExistingHabitIfItNamesOne()
     {
         Assert.Equal(SqlState.ForeignKeyViolation, (await Sql.RejectedAsync(() => Sql.InsertRecordAsync(_db, Guid.NewGuid(), "2026-10-08"))).SqlState);
@@ -261,6 +274,67 @@ public class SchemaTests : IAsyncLifetime
         await Sql.InsertResolutionAsync(_db, _user, title: "Read");
     }
 
+    [Fact]
+    public async Task AUserHasOneTagPerName_IgnoringCase_ButAnotherUserMayHaveTheSameName()
+    {
+        await Sql.InsertTagAsync(_db, _user, "krank");
+
+        // The Domain stores the case-folded name as the key: "Krank" and "krank" collide on it.
+        Assert.Equal(SqlState.UniqueViolation, (await Sql.RejectedAsync(() => Sql.InsertTagAsync(_db, _user, "Krank"))).SqlState);
+
+        await Sql.InsertTagAsync(_db, _user, "Urlaub");
+        await Sql.InsertTagAsync(_db, await Sql.InsertUserAsync(_db), "krank");
+    }
+
+    [Fact]
+    public async Task ATagNameIsAtMost30Characters()
+    {
+        await Sql.InsertTagAsync(_db, _user, new string('a', 30));
+
+        Assert.Equal(SqlState.StringTooLong, (await Sql.RejectedAsync(() => Sql.InsertTagAsync(_db, _user, new string('b', 31)))).SqlState);
+    }
+
+    [Fact]
+    public async Task AHabitHasOneDayEntryPerDay()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+
+        Assert.Equal(SqlState.UniqueViolation, (await Sql.RejectedAsync(() => Sql.InsertDayEntryAsync(_db, habit, "2026-10-08"))).SqlState);
+
+        await Sql.InsertDayEntryAsync(_db, habit, "2026-10-09");
+        await Sql.InsertDayEntryAsync(_db, await Sql.InsertHabitAsync(_db, _user), "2026-10-08");
+    }
+
+    [Theory]
+    [InlineData("2000-01-01", true)]
+    [InlineData("2100-12-31", true)]
+    [InlineData("1999-12-31", false)]
+    [InlineData("2101-01-01", false)]
+    public async Task ADayEntryIsOnAPlausibleDay(string date, bool accepted)
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+
+        if (accepted)
+            await Sql.InsertDayEntryAsync(_db, habit, date);
+        else
+            Assert.Equal(SqlState.CheckViolation, (await Sql.RejectedAsync(() => Sql.InsertDayEntryAsync(_db, habit, date))).SqlState);
+    }
+
+    [Fact]
+    public async Task ATagIsOnADayOnlyOnce_ButOnManyDays()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+        var tag = await Sql.InsertTagAsync(_db, _user);
+        await Sql.InsertDayTagAsync(_db, entry, tag);
+
+        Assert.Equal(SqlState.UniqueViolation, (await Sql.RejectedAsync(() => Sql.InsertDayTagAsync(_db, entry, tag))).SqlState);
+
+        await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, habit, "2026-10-09"), tag);
+        await Sql.InsertDayTagAsync(_db, entry, await Sql.InsertTagAsync(_db, _user, "Urlaub"));
+    }
+
     // ---- cascades ----
 
     [Fact]
@@ -286,6 +360,62 @@ public class SchemaTests : IAsyncLifetime
 
         var recordsOfOther = "SELECT COUNT(*) FROM \"HabitRecords\" WHERE \"HabitId\" IN (SELECT \"Id\" FROM \"Habits\" WHERE \"UserId\" = @p0)";
         Assert.Equal(1, await Sql.ScalarAsync(_db, recordsOfOther, other));
+    }
+
+    [Fact]
+    public async Task DeletingAUser_RemovesTheirTagsAndTaggedDays_AndNothingOfAnybodyElse()
+    {
+        var other = await Sql.InsertUserAsync(_db);
+        foreach (var owner in new[] { _user, other })
+        {
+            var habit = await Sql.InsertHabitAsync(_db, owner);
+            var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+            await Sql.InsertDayTagAsync(_db, entry, await Sql.InsertTagAsync(_db, owner));
+        }
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "AspNetUsers" WHERE "Id" = {_user}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "Tags", "UserId", _user));
+        Assert.Equal(1, await Sql.CountAsync(_db, "Tags", "UserId", other));
+        Assert.Equal(1, await Sql.ScalarAsync(_db, """
+            SELECT COUNT(*) FROM "HabitDayTags" t JOIN "Tags" g ON g."Id" = t."TagId" WHERE g."UserId" = @p0
+            """, other));
+        Assert.Equal(0, await Sql.ScalarAsync(_db, """
+            SELECT COUNT(*) FROM "HabitDayEntries" e JOIN "Habits" h ON h."Id" = e."HabitId" WHERE h."UserId" = @p0
+            """, _user));
+    }
+
+    [Fact]
+    public async Task DeletingATag_TakesItOffItsDays_ButKeepsTheEntriesAndTheOtherTags()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+        var sick = await Sql.InsertTagAsync(_db, _user, "krank");
+        var holiday = await Sql.InsertTagAsync(_db, _user, "Urlaub");
+        await Sql.InsertDayTagAsync(_db, entry, sick);
+        await Sql.InsertDayTagAsync(_db, entry, holiday);
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Tags" WHERE "Id" = {sick}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitDayTags", "TagId", sick));
+        Assert.Equal(1, await Sql.CountAsync(_db, "HabitDayTags", "TagId", holiday));
+        Assert.Equal(1, await Sql.CountAsync(_db, "HabitDayEntries", "Id", entry));
+    }
+
+    [Fact]
+    public async Task DeletingAHabit_RemovesItsTaggedDays_ButNotTheTags()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var other = await Sql.InsertHabitAsync(_db, _user);
+        var tag = await Sql.InsertTagAsync(_db, _user);
+        await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08"), tag);
+        await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, other, "2026-10-08"), tag);
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Habits" WHERE "Id" = {habit}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitDayEntries", "HabitId", habit));
+        Assert.Equal(1, await Sql.CountAsync(_db, "HabitDayTags", "TagId", tag)); // only the other habit's day is left
+        Assert.Equal(1, await Sql.CountAsync(_db, "Tags", "Id", tag));
     }
 
     [Fact]
@@ -343,6 +473,10 @@ public class SchemaTests : IAsyncLifetime
         Assert.Equal(("character varying", "NO"), TypeOf("RefreshTokens.TokenHash"));
         Assert.Equal(("character varying", "YES"), TypeOf("AspNetUsers.FirstName"));
         Assert.Equal(("character varying", "YES"), TypeOf("AspNetUsers.LastName"));
+        Assert.Equal(("character varying", "NO"), TypeOf("Tags.Name"));
+        Assert.Equal(("character varying", "NO"), TypeOf("Tags.NameKey"));
+        Assert.Equal(("date", "NO"), TypeOf("HabitDayEntries.Date"));
+        Assert.Equal(("uuid", "NO"), TypeOf("HabitDayTags.TagId"));
 
         // No default for the start date: one that the check constraint rejects (0001-01-01) would be a trap for any insert
         // that forgets the column.

@@ -1,4 +1,5 @@
 using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Application.Tags;
 
 namespace HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 
@@ -8,7 +9,12 @@ namespace HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 /// oldest first. A day of the range that is not in the list is "not scheduled" (or, before the start date, "not applicable").
 /// </param>
 /// <param name="CompletedDates">Completed days within the requested range, oldest first.</param>
+/// <param name="TaggedDays">
+/// The days within the requested range that carry tags (of any kind of day: done or not), oldest first, each with its
+/// tags by name. A day of the range that is not in the list has no tags.
+/// </param>
 /// <param name="CurrentStreak">Scheduled days in a row, as of the requested day - independent of the range, it can span months.</param>
 public record HabitOverviewDto(
     Guid Id, string Title, RecurrenceDto Recurrence, DateOnly StartDate,
-    IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates, int CurrentStreak);
+    IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates,
+    IReadOnlyList<TaggedDayDto> TaggedDays, int CurrentStreak);

@@ -145,6 +145,55 @@ namespace HannasHabits.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HabitId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("HabitDayEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_HabitDayEntries_Date", "\"Date\" BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'");
+                        });
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HabitDayEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TagId");
+
+                    b.HasIndex("HabitDayEntryId", "TagId")
+                        .IsUnique();
+
+                    b.ToTable("HabitDayTags", (string)null);
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.HabitRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -202,6 +251,35 @@ namespace HannasHabits.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Resolutions_Year", "\"Year\" BETWEEN 2000 AND 2100");
                         });
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "NameKey")
+                        .IsUnique();
+
+                    b.ToTable("Tags", (string)null);
                 });
 
             modelBuilder.Entity("HannasHabits.Infrastructure.Identity.ApplicationUser", b =>
@@ -466,6 +544,30 @@ namespace HannasHabits.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayEntry", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.Habit", null)
+                        .WithMany()
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayTag", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.HabitDayEntry", null)
+                        .WithMany("Tags")
+                        .HasForeignKey("HabitDayEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HannasHabits.Domain.Entities.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.HabitRecord", b =>
                 {
                     b.HasOne("HannasHabits.Domain.Entities.Habit", null)
@@ -482,6 +584,15 @@ namespace HannasHabits.Infrastructure.Migrations
                         .HasForeignKey("HabitId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.Tag", b =>
+                {
                     b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -552,6 +663,11 @@ namespace HannasHabits.Infrastructure.Migrations
             modelBuilder.Entity("HannasHabits.Domain.Entities.Habit", b =>
                 {
                     b.Navigation("Records");
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayEntry", b =>
+                {
+                    b.Navigation("Tags");
                 });
 #pragma warning restore 612, 618
         }

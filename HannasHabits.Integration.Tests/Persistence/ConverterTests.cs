@@ -96,6 +96,26 @@ public class ConverterTests
         Assert.False(comparer.Equals(one, [DiaryTask.Create("a", true)])); // ticking a task off is a change
     }
 
+    // ---- tag names ----
+
+    [Fact]
+    public void TagNames_AreStoredAsTheirPlainText_InTheSpellingTheyWereChosenIn()
+    {
+        var converter = new TagNameConverter();
+
+        Assert.Equal("Krank", converter.ConvertToProvider(TagName.Create("  Krank ")));
+        Assert.Equal(TagName.Create("Krank"), converter.ConvertFromProvider("Krank"));
+    }
+
+    [Fact]
+    public void TagNames_ADamagedRowFailsLoudly()
+    {
+        var converter = new TagNameConverter();
+
+        Assert.Throws<DomainException>(() => converter.ConvertFromProvider("   "));
+        Assert.Throws<DomainException>(() => converter.ConvertFromProvider(new string('a', TagName.MaxLength + 1)));
+    }
+
     // ---- the plain ones ----
 
     [Fact]

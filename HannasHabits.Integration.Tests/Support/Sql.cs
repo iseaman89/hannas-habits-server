@@ -88,6 +88,42 @@ public static class Sql
         return id;
     }
 
+    /// <summary>A tag through plain SQL; <c>NameKey</c> is what the Domain would compute (the upper-cased name).</summary>
+    public static async Task<Guid> InsertTagAsync(ApplicationDbContext db, Guid userId, string name = "krank", string? nameKey = null)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Tags" ("Id", "CreatedAt", "UserId", "Name", "NameKey")
+            VALUES ({id}, {DateTime.UtcNow}, {userId}, {name}, {nameKey ?? name.ToUpperInvariant()})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertDayEntryAsync(ApplicationDbContext db, Guid habitId, string date)
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HabitDayEntries" ("Id", "CreatedAt", "HabitId", "Date") VALUES ({id}, {DateTime.UtcNow}, {habitId}, {day})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertDayTagAsync(ApplicationDbContext db, Guid entryId, Guid tagId)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HabitDayTags" ("Id", "CreatedAt", "HabitDayEntryId", "TagId") VALUES ({id}, {DateTime.UtcNow}, {entryId}, {tagId})
+            """);
+
+        return id;
+    }
+
     public static async Task<Guid> InsertRefreshTokenAsync(ApplicationDbContext db, Guid userId, string? hash = null)
     {
         var id = Guid.NewGuid();

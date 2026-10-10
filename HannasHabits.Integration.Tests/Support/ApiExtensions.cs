@@ -24,6 +24,30 @@ public static class ApiExtensions
             Assert.Equal(HttpStatusCode.OK, (await user.Client.PutAsync($"/api/habits/{habitId}/records/{date}")).StatusCode);
     }
 
+    /// <summary>Creates a tag (the call must answer 201) and returns its id.</summary>
+    public static async Task<Guid> CreateTagAsync(this TestUser user, string name = "krank")
+    {
+        var response = await user.Client.PostAsync("/api/tags", new { name });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Puts tags on a day of a habit (every call must answer 200).</summary>
+    public static async Task TagAsync(this TestUser user, Guid habitId, string date, params Guid[] tagIds)
+    {
+        foreach (var tagId in tagIds)
+            Assert.Equal(HttpStatusCode.OK, (await user.Client.PutAsync($"/api/habits/{habitId}/days/{date}/tags/{tagId}")).StatusCode);
+    }
+
+    public static async Task<System.Text.Json.JsonElement> TagsAsync(this TestUser user, Guid? habitId = null)
+    {
+        var response = await user.Client.GetAsync("/api/tags" + (habitId is null ? "" : $"?habitId={habitId}"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.ReadJsonAsync();
+    }
+
     public static string[] Days(int year, int month, params int[] days)
         => days.Select(day => new DateOnly(year, month, day).ToString("yyyy-MM-dd")).ToArray();
 
