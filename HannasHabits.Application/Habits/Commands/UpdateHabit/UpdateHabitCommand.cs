@@ -10,4 +10,7 @@ public class UpdateHabitCommand : IRequest<Unit>
 
     /// <summary>The planned days of the week. Required: an update replaces the whole habit.</summary>
     public List<DayOfWeek> Schedule { get; set; } = default!;
+
+    /// <summary>The first day the habit applies (the caller's local date); <c>null</c> keeps the current one.</summary>
+    public DateOnly? StartDate { get; set; }
 }

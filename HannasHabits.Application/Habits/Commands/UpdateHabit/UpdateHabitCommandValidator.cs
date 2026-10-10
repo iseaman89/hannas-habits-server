@@ -17,6 +17,10 @@ public class UpdateHabitCommandValidator : AbstractValidator<UpdateHabitCommand>
         RuleFor(x => x.Description)
             .MaximumLength(Habit.DescriptionMaxLength);
 
+        RuleFor(x => x.StartDate)
+            .InclusiveBetween(Habit.MinStartDate, Habit.MaxStartDate)
+            .When(x => x.StartDate.HasValue);
+
         RuleFor(x => x.Schedule).NotEmpty();
         RuleForEach(x => x.Schedule).IsInEnum();
     }

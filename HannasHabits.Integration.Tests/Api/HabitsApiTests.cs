@@ -221,7 +221,39 @@ public class HabitsApiTests
     // ---- update ----
 
     [Fact]
-    public async Task Update_ReplacesTheHabit_ButNotItsStartDate()
+    public async Task Update_WithAStartDate_MovesIt_AndEarlierDaysCanBeBackFilled()
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Read", null, "2026-10-01");
+
+        var update = await user.Client.PutAsync(
+            $"/api/habits/{id}", new { title = "Read", schedule = new[] { 0, 1, 2, 3, 4, 5, 6 }, startDate = "2026-09-01" });
+
+        Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
+        var body = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        Assert.Equal("2026-09-01", body.GetProperty("startDate").GetString());
+        await user.MarkAsync(id, "2026-09-10"); // a day before the old start: still stored
+    }
+
+    [Theory]
+    [InlineData("1999-12-31")]
+    [InlineData("2101-01-01")]
+    public async Task Update_AStartDateOutOfRange_IsA400_AndChangesNothing(string startDate)
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Read", [1], "2026-03-01");
+
+        var response = await user.Client.PutAsync($"/api/habits/{id}", new { title = "Run", schedule = new[] { 2 }, startDate });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("startDate", await response.ErrorKeysAsync());
+        var body = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        Assert.Equal("Read", body.GetProperty("title").GetString());
+        Assert.Equal("2026-03-01", body.GetProperty("startDate").GetString());
+    }
+
+    [Fact]
+    public async Task Update_WithoutAStartDate_ReplacesTheHabit_ButKeepsItsStartDate()
     {
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read", [1], "2026-03-01", "old");

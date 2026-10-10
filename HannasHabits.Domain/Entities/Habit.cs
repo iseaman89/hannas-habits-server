@@ -49,14 +49,20 @@ public class Habit : EntityBase
         Guid userId, HabitTitle title, DateOnly startDate, string? description = null, HabitSchedule? schedule = null)
         => new Habit(userId, title, startDate, description, schedule ?? HabitSchedule.Daily);
 
-    public void Update(HabitTitle title, string? description, HabitSchedule schedule)
+    /// <param name="startDate">
+    /// A new first day, e.g. to back-fill earlier days; <c>null</c> keeps the current one. Records before a start date
+    /// moved forward are kept but no longer shown or counted (like records on days that are no longer scheduled).
+    /// </param>
+    public void Update(HabitTitle title, string? description, HabitSchedule schedule, DateOnly? startDate = null)
     {
         // Validate first, assign afterwards: a rejected update must not leave the habit half changed.
         var normalizedDescription = NormalizeDescription(description);
+        var validatedStartDate = startDate is { } date ? ValidateStartDate(date) : StartDate;
 
         Title = title;
         Description = normalizedDescription;
         Schedule = schedule;
+        StartDate = validatedStartDate;
     }
 
     /// <summary>The record of the given day, or <c>null</c> if the habit was not completed that day. Needs the records loaded.</summary>

@@ -161,6 +161,24 @@ public class UpdateHabitCommandValidatorTests
     }
 
     [Fact]
+    public void TheStartDate_IsOptional_AndLimitedToTheSameRangeAsOnCreate()
+    {
+        var command = Valid();
+
+        command.StartDate = null;
+        _validator.TestValidate(command).ShouldNotHaveValidationErrorFor(x => x.StartDate);
+
+        command.StartDate = new DateOnly(2000, 1, 1);
+        _validator.TestValidate(command).ShouldNotHaveValidationErrorFor(x => x.StartDate);
+
+        command.StartDate = new DateOnly(1999, 12, 31);
+        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.StartDate);
+
+        command.StartDate = new DateOnly(2101, 1, 1);
+        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.StartDate);
+    }
+
+    [Fact]
     public void TheSchedule_IsRequired_BecauseAnUpdateReplacesTheWholeHabit()
     {
         var command = Valid();

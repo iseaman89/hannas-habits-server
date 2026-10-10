@@ -129,6 +129,43 @@ public class HabitTests
     }
 
     [Fact]
+    public void Update_WithAStartDate_MovesIt()
+    {
+        var habit = NewHabit();
+        var earlier = Start.AddMonths(-2);
+
+        habit.Update(habit.Title, habit.Description, habit.Schedule, earlier);
+
+        Assert.Equal(earlier, habit.StartDate);
+    }
+
+    [Fact]
+    public void Update_MovingTheStartDateForward_KeepsTheRecordsBeforeIt()
+    {
+        var habit = NewHabit();
+        habit.MarkCompleted(Start);
+
+        habit.Update(habit.Title, habit.Description, habit.Schedule, Start.AddDays(10));
+
+        Assert.NotNull(habit.RecordOn(Start));
+    }
+
+    [Theory]
+    [InlineData("1999-12-31")]
+    [InlineData("2101-01-01")]
+    public void Update_AStartDateOutOfRange_IsRejected_AndChangesNothing(string startDate)
+    {
+        var habit = NewHabit("Read", "old");
+
+        Assert.Throws<DomainException>(() =>
+            habit.Update(HabitTitle.Create("Run"), "new", habit.Schedule, DateOnly.Parse(startDate)));
+
+        Assert.Equal("Read", habit.Title.Value);
+        Assert.Equal("old", habit.Description);
+        Assert.Equal(Start, habit.StartDate);
+    }
+
+    [Fact]
     public void Update_WithoutADescription_RemovesIt()
     {
         var habit = NewHabit(description: "old");

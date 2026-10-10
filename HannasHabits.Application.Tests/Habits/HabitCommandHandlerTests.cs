@@ -127,6 +127,21 @@ public class UpdateHabitCommandHandlerTests
     }
 
     [Fact]
+    public async Task AGivenStartDate_ReplacesTheOldOne()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Read", start: new DateOnly(2026, 10, 1));
+        _habits.Habits.Add(habit);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id, Title = "Read", Schedule = [DayOfWeek.Monday], StartDate = new DateOnly(2026, 8, 15)
+        });
+
+        Assert.Equal(new DateOnly(2026, 8, 15), habit.StartDate);
+        Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task AnUnknownHabit_IsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => Handle(

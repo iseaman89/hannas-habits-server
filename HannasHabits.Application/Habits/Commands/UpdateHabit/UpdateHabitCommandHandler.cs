@@ -26,7 +26,9 @@ public class UpdateHabitCommandHandler : IRequestHandler<UpdateHabitCommand, Uni
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.Id);
 
-        habit.Update(HabitTitle.Create(request.Title), request.Description, HabitSchedule.Create(request.Schedule));
+        habit.Update(
+            HabitTitle.Create(request.Title), request.Description, HabitSchedule.Create(request.Schedule),
+            request.StartDate);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

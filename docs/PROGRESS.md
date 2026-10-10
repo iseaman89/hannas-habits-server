@@ -582,3 +582,13 @@ The PR comment listed the same 3 "Generic Password" findings as before (incident
 - **Pushed straight to `main`** (fast-forward, on the user's explicit request), not to `dev`, so no PR check runs for it.
 
 **Verified:** Release build 0 warnings; 792 tests green (160 / 192 / 28 / 412).
+
+## 2026-10-10 (1) — Editable start date, plan for recurrence rules and tags (backend + frontend)
+
+The user's wife wants notes per habit and day, marking days of earlier months and richer repeat rules. The plan is in `docs/ROADMAP.md` ("Round 2": B12+F10 done, B13/F11 recurrence, B14/F12 tags, later N× per week). The user left the decisions to Claude (tags per user, back-fill without a limit, no free text yet).
+- **Finding:** past days were already tickable (server permissive; a past scheduled day is `missed`, which `isToggleable`). What blocked the "earlier month" was the start date: always today at creation and never editable, so everything before it was "not applicable".
+- **Done (B12):** `Habit.Update(..., DateOnly? startDate = null)` (validated before anything is assigned; `null` keeps it), `UpdateHabitCommand.StartDate` + validator (2000..2100), `UpdateHabitRequest.StartDate` (optional on `PUT`: omitted = unchanged, so nothing breaks for old clients). Moving it forward keeps the marks before it (hidden, not counted).
+- **Done (F10, frontend `dev`):** `startDate` is part of `HabitInput` / `HabitValues` / the zod schema (real date, 2000..2100), a `Starts on` date field in `HabitForm` (add + edit; hint "Pick an earlier day to fill in what you already did."); `EMPTY_HABIT` became `emptyHabit(today)`; `create` no longer adds the date on the side. `schema.d.ts`: `UpdateHabitRequest.startDate` added **by hand** in the shape the generator emits for `CreateHabitRequest` (`npm run api:types` needs a running API) — regenerate when convenient.
+- **Verified:** backend Release build 0 warnings, 801 tests green (164 / 194 / 28 / 415; +9). Frontend typecheck, lint (0), format, build green; 940 tests green; the habit tests also in Pacific/Auckland and America/Los_Angeles. **Not looked at in a browser** (the user's decision), not run against the real API.
+- **Known:** with a start date moved *forward*, marks before it vanish from the grid and the streak but are kept — moving it back brings them back.
+
