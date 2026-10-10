@@ -25,16 +25,25 @@ public static class Sql
         return id;
     }
 
+    /// <summary>
+    /// A habit through plain SQL, so the check constraints are what is tested. <paramref name="schedule"/> is the weekday
+    /// bit set (127 = every day); without the other schedule columns the habit is "weekly, every week".
+    /// </summary>
     public static async Task<Guid> InsertHabitAsync(
         ApplicationDbContext db, Guid userId, string title = "Habit", int schedule = 127,
-        string startDate = "2026-01-01", DateTime? createdAt = null)
+        string startDate = "2026-01-01", DateTime? createdAt = null,
+        int kind = 0, int interval = 1, string? anchor = null, int? occurrence = null, int? dayOfMonth = null)
     {
         var id = Guid.NewGuid();
         var start = DateOnly.Parse(startDate);
+        DateOnly? anchorDate = anchor is null ? null : DateOnly.Parse(anchor);
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Habits" ("Id", "CreatedAt", "UserId", "Title", "Schedule", "StartDate")
-            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {userId}, {title}, {schedule}, {start})
+            INSERT INTO "Habits" ("Id", "CreatedAt", "UserId", "Title", "StartDate",
+                                  "ScheduleKind", "ScheduleWeekdays", "ScheduleInterval", "ScheduleAnchor",
+                                  "ScheduleOccurrence", "ScheduleDayOfMonth")
+            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {userId}, {title}, {start},
+                    {kind}, {schedule}, {interval}, {anchorDate}, {occurrence}, {dayOfMonth})
             """);
 
         return id;

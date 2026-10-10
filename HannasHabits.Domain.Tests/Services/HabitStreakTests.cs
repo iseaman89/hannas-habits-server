@@ -1,3 +1,4 @@
+using HannasHabits.Domain.Enums;
 using HannasHabits.Domain.Services;
 using HannasHabits.Domain.ValueObjects;
 
@@ -12,8 +13,8 @@ public class HabitStreakTests
 
     private static readonly HabitSchedule Daily = HabitSchedule.Daily;
     private static readonly HabitSchedule Weekdays =
-        HabitSchedule.Create([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]);
-    private static readonly HabitSchedule Weekend = HabitSchedule.Create([DayOfWeek.Saturday, DayOfWeek.Sunday]);
+        HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]);
+    private static readonly HabitSchedule Weekend = HabitSchedule.Weekly([DayOfWeek.Saturday, DayOfWeek.Sunday]);
 
     private static int Streak(HabitSchedule schedule, DateOnly start, DateOnly asOf, params DateOnly[] done)
         => HabitStreak.Current(schedule, start, done.ToHashSet(), asOf);
@@ -174,7 +175,7 @@ public class HabitStreakTests
     [Fact]
     public void AOnceAWeekHabit_CountsWeeks()
     {
-        var thursdays = HabitSchedule.Create([DayOfWeek.Thursday]);
+        var thursdays = HabitSchedule.Weekly([DayOfWeek.Thursday]);
 
         Assert.Equal(2, Streak(thursdays, D(1), D(8), Days(8, 1)));
         Assert.Equal(1, Streak(thursdays, D(1), D(8), Days(8)));
@@ -205,6 +206,60 @@ public class HabitStreakTests
         Assert.Equal(0, Streak(Daily, DateOnly.MaxValue, min, min));
     }
 
+    // ---- the other rules ----
+
+    [Fact]
+    public void EveryOtherWeek_OnlyTheDueWeeksCount_AMissedOffWeekIsNotAMiss()
+    {
+        // Mondays of October 2026: 5, 12, 19, 26. Every second week from the week of 5 October: due on 5 and 19.
+        var fortnightly = HabitSchedule.Weekly([DayOfWeek.Monday], everyWeeks: 2, anchor: D(5));
+        var done = new[] { new DateOnly(2026, 9, 21), new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 19) };
+
+        // asOf Tuesday 20 October: the Monday 19th and, two weeks before, the 5th and 21 September - nothing was due in between.
+        Assert.Equal(3, Streak(fortnightly, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 20), done));
+        // A missed due Monday ends it.
+        Assert.Equal(1, Streak(fortnightly, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 20), new DateOnly(2026, 10, 19)));
+    }
+
+    [Fact]
+    public void EveryThreeDays_CountsOnlyEveryThirdDay()
+    {
+        var everyThree = HabitSchedule.EveryNDays(3, D(8));
+
+        // Due: 8, 5, 2, ... Done on the due days only.
+        Assert.Equal(3, Streak(everyThree, D(1), D(8), Days(8, 5, 2)));
+        // Records on the days between are ignored.
+        Assert.Equal(3, Streak(everyThree, D(1), D(8), Days(8, 7, 6, 5, 4, 3, 2)));
+        // Missing the 5th ends it.
+        Assert.Equal(1, Streak(everyThree, D(1), D(8), Days(8, 2)));
+        // Today (8th) is due but still open: it is skipped, not a break.
+        Assert.Equal(2, Streak(everyThree, D(1), D(8), Days(5, 2)));
+    }
+
+    [Fact]
+    public void MonthlyOnDate_ACompletedStreakReachesBackAcrossMonths()
+    {
+        var onThe15th = HabitSchedule.MonthlyOnDate(15);
+        var done = new[] { new DateOnly(2026, 8, 15), new DateOnly(2026, 9, 15), new DateOnly(2026, 10, 15) };
+
+        Assert.Equal(3, HabitStreak.Current(onThe15th, new DateOnly(2026, 7, 1), done.ToHashSet(), new DateOnly(2026, 10, 20)));
+        // On the 12th this month's 15th has not come yet (its record is in the future and ignored): the two months before count.
+        Assert.Equal(2, HabitStreak.Current(onThe15th, new DateOnly(2026, 7, 1), done.ToHashSet(), new DateOnly(2026, 10, 12)));
+    }
+
+    [Fact]
+    public void MonthlyOnTheLastSaturday_TheStreakBreaksOnAMissedMonth()
+    {
+        var lastSaturday = HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Last, DayOfWeek.Saturday);
+        // Last Saturdays: 25 July, 29 August, 26 September, 31 October 2026.
+        var done = new[] { new DateOnly(2026, 7, 25), new DateOnly(2026, 9, 26) };
+
+        Assert.Equal(1, HabitStreak.Current(lastSaturday, new DateOnly(2026, 7, 1), done.ToHashSet(), new DateOnly(2026, 10, 10)));
+
+        var all = done.Append(new DateOnly(2026, 8, 29)).ToHashSet();
+        Assert.Equal(3, HabitStreak.Current(lastSaturday, new DateOnly(2026, 7, 1), all, new DateOnly(2026, 10, 10)));
+    }
+
     // ---- against an independent formulation ----
 
     // The rule built the other way round: collect the scheduled days from the start up to the as-of day (oldest first),
@@ -213,7 +268,7 @@ public class HabitStreakTests
     {
         var scheduled = new List<DateOnly>();
         for (var day = start; day <= asOf; day = day.AddDays(1))
-            if (schedule.IncludesDay(day.DayOfWeek))
+            if (schedule.IsScheduledOn(day))
                 scheduled.Add(day);
 
         var index = scheduled.Count - 1;
@@ -242,7 +297,7 @@ public class HabitStreakTests
         for (var i = 0; i < 20_000; i++)
         {
             var mask = random.Next(1, 128);
-            var schedule = HabitSchedule.Create(allDays.Where(day => (mask & (1 << (int)day)) != 0));
+            var schedule = HabitSchedule.Weekly(allDays.Where(day => (mask & (1 << (int)day)) != 0));
 
             var start = new DateOnly(2026, 1, 1).AddDays(random.Next(0, 200));
             var asOf = start.AddDays(random.Next(-10, 200));

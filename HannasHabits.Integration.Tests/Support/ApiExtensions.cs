@@ -6,9 +6,10 @@ namespace HannasHabits.Integration.Tests.Support;
 public static class ApiExtensions
 {
     public static async Task<Guid> CreateHabitAsync(
-        this TestUser user, string title = "Read", int[]? schedule = null, string? startDate = null, string? description = null)
+        this TestUser user, string title = "Read", int[]? schedule = null, string? startDate = null, string? description = null,
+        object? recurrence = null)
     {
-        var response = await user.Client.PostAsync("/api/habits", new { title, description, schedule, startDate });
+        var response = await user.Client.PostAsync("/api/habits", new { title, description, schedule, startDate, recurrence });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();

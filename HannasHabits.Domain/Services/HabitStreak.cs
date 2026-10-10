@@ -28,7 +28,7 @@ public static class HabitStreak
         {
             var day = DateOnly.FromDayNumber(asOf.DayNumber - offset);
 
-            if (!schedule.IncludesDay(day.DayOfWeek))
+            if (!schedule.IsScheduledOn(day))
                 continue;
 
             if (completedDates.Contains(day))

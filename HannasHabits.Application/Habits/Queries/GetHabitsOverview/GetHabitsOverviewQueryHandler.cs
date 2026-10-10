@@ -1,4 +1,5 @@
 using HannasHabits.Application.Common.Interfaces;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Domain.Services;
 using MediatR;
 
@@ -31,7 +32,9 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
                 habit.Id,
                 habit.Title,
                 habit.Schedule.Days,
+                RecurrenceDto.From(habit.Schedule),
                 habit.StartDate,
+                HabitDueDays.Between(habit.Schedule, habit.StartDate, from, to),
                 habit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList(),
                 HabitStreak.Current(habit.Schedule, habit.StartDate, habit.CompletedDates.ToHashSet(), asOf)))
             .ToList();

@@ -3,6 +3,7 @@ using HannasHabits.Application.Habits;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Domain.Entities;
 
 namespace HannasHabits.Application.Tests.Fakes;
@@ -53,7 +54,8 @@ internal sealed class FakeHabitQueries : IHabitQueries
         AskedForUsers.Add(userId);
         return Task.FromResult(_repository.Habits
             .Where(h => h.UserId == userId)
-            .Select(h => new HabitListItemDto(h.Id, h.Title.Value, h.Description, h.Schedule.Days))
+            .Select(h => new HabitListItemDto(
+                h.Id, h.Title.Value, h.Description, h.Schedule.Days, RecurrenceDto.From(h.Schedule)))
             .ToList());
     }
 
@@ -74,7 +76,9 @@ internal sealed class FakeHabitQueries : IHabitQueries
 
         return Task.FromResult(habit is null
             ? null
-            : new HabitDetailsDto(habit.Id, habit.Title.Value, habit.Description, habit.Schedule.Days, habit.StartDate, habit.CreatedAt));
+            : new HabitDetailsDto(
+                habit.Id, habit.Title.Value, habit.Description, habit.Schedule.Days, RecurrenceDto.From(habit.Schedule),
+                habit.StartDate, habit.CreatedAt));
     }
 
     public Task<List<HabitRecordDto>?> GetRecordsAsync(

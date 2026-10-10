@@ -2,7 +2,9 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Application.Tests.Fakes;
+using HannasHabits.Domain.Enums;
 using HannasHabits.Domain.ValueObjects;
 using Microsoft.Extensions.Time.Testing;
 
@@ -84,7 +86,7 @@ public class GetHabitsOverviewQueryHandlerTests
     {
         var first = Make.NewHabit(_user.UserId, "Read", new DateOnly(2026, 1, 5));
         var second = Make.NewHabit(_user.UserId, "Run", new DateOnly(2026, 2, 6),
-            HabitSchedule.Create([DayOfWeek.Saturday, DayOfWeek.Monday]));
+            HabitSchedule.Weekly([DayOfWeek.Saturday, DayOfWeek.Monday]));
         _repository.Habits.Add(first);
         _repository.Habits.Add(second);
         _repository.Habits.Add(Make.NewHabit(Guid.NewGuid(), "Somebody else's"));
@@ -105,6 +107,49 @@ public class GetHabitsOverviewQueryHandlerTests
                 Assert.Equal([DayOfWeek.Monday, DayOfWeek.Saturday], item.Schedule);
                 Assert.Equal(new DateOnly(2026, 2, 6), item.StartDate);
             });
+    }
+
+    [Fact]
+    public async Task ScheduledDates_AreTheDaysTheRuleIsDueOnInTheRange_NoneBeforeTheStartDate()
+    {
+        // Mondays and Thursdays, every 2nd week counted from the week of 5 October.
+        var fortnightly = HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Thursday], 2, new DateOnly(2026, 10, 7));
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 10, 1), fortnightly));
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Mondays", new DateOnly(2026, 10, 20),
+            HabitSchedule.Weekly([DayOfWeek.Monday])));
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Rent", new DateOnly(2026, 1, 1), HabitSchedule.MonthlyOnDate(31)));
+
+        var overview = await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31));
+
+        Assert.Equal(Days(10, 5, 8, 19, 22), overview[0].ScheduledDates);
+        Assert.Equal(Days(10, 26), overview[1].ScheduledDates); // the 5th, 12th and 19th are before the habit
+        Assert.Equal(Days(10, 31), overview[2].ScheduledDates);
+    }
+
+    [Fact]
+    public async Task TheRecurrence_IsTheRuleItself_NotJustItsWeekdays()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", new DateOnly(2026, 10, 1),
+            HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10))));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Equal(ScheduleKind.EveryNDays, item.Recurrence.Kind);
+        Assert.Equal(3, item.Recurrence.Interval);
+        Assert.Equal(new DateOnly(2026, 10, 10), item.Recurrence.Anchor);
+        Assert.Equal(HabitSchedule.Daily.Days, item.Schedule); // the deprecated list: every weekday is possible
+    }
+
+    [Fact]
+    public async Task TheStreakFollowsTheRule_NotTheWeekdays()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Water plants", new DateOnly(2026, 10, 1),
+            HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10)), completed: Days(10, 1, 4, 7));
+        _repository.Habits.Add(habit);
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), asOf: new DateOnly(2026, 10, 8)));
+
+        Assert.Equal(3, item.CurrentStreak); // due on the 7th, 4th and 1st; the 8th is not due at all
     }
 
     [Fact]
@@ -179,7 +224,7 @@ public class GetHabitsOverviewQueryHandlerTests
     [Fact]
     public async Task ARecordOnAnUnscheduledDayDoesNotCountForTheStreak_ButIsStillListed()
     {
-        var weekdays = HabitSchedule.Create([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]);
+        var weekdays = HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]);
         // Thu 8 done, Sat 3 + Sun 4 done too (not planned), Fri 2 + Thu 1 done.
         _repository.Habits.Add(Make.NewHabit(_user.UserId, start: new DateOnly(2026, 10, 1), schedule: weekdays,
             completed: Days(10, 8, 3, 4, 2, 1)));

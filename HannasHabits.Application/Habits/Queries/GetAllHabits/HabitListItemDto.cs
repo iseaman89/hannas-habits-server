@@ -1,3 +1,7 @@
+using HannasHabits.Application.Habits.Recurrence;
+
 namespace HannasHabits.Application.Habits.Queries.GetAllHabits;
 
-public record HabitListItemDto(Guid Id, string Title, string? Description, IReadOnlyList<DayOfWeek> Schedule);
+/// <param name="Schedule">Deprecated, use <paramref name="Recurrence"/>: the weekdays on which the habit can be due.</param>
+public record HabitListItemDto(
+    Guid Id, string Title, string? Description, IReadOnlyList<DayOfWeek> Schedule, RecurrenceDto Recurrence);

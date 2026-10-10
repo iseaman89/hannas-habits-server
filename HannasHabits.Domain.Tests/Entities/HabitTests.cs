@@ -17,7 +17,7 @@ public class HabitTests
     [Fact]
     public void Create_SetsTheGivenValues()
     {
-        var schedule = HabitSchedule.Create([DayOfWeek.Monday]);
+        var schedule = HabitSchedule.Weekly([DayOfWeek.Monday]);
 
         var habit = Habit.Create(UserId, HabitTitle.Create("Read"), Start, "20 pages", schedule);
 
@@ -118,7 +118,7 @@ public class HabitTests
     public void Update_ReplacesTitleDescriptionAndSchedule_ButNotTheStartDate()
     {
         var habit = NewHabit("Read", "old", HabitSchedule.Daily);
-        var schedule = HabitSchedule.Create([DayOfWeek.Saturday, DayOfWeek.Sunday]);
+        var schedule = HabitSchedule.Weekly([DayOfWeek.Saturday, DayOfWeek.Sunday]);
 
         habit.Update(HabitTitle.Create("Run"), "new", schedule);
 
@@ -182,7 +182,7 @@ public class HabitTests
         var tooLong = new string('a', Habit.DescriptionMaxLength + 1);
 
         Assert.Throws<DomainException>(() =>
-            habit.Update(HabitTitle.Create("Run"), tooLong, HabitSchedule.Create([DayOfWeek.Monday])));
+            habit.Update(HabitTitle.Create("Run"), tooLong, HabitSchedule.Weekly([DayOfWeek.Monday])));
 
         Assert.Equal("Read", habit.Title.Value);
         Assert.Equal("old", habit.Description);

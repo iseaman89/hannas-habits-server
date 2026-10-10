@@ -43,7 +43,7 @@ public class RepositoryTests : IAsyncLifetime
     public async Task AHabit_RoundTripsThroughTheDatabase_WithEveryValue()
     {
         var habit = Habit.Create(_user, HabitTitle.Create("Read"), new DateOnly(2026, 3, 1), "20 pages",
-            HabitSchedule.Create([DayOfWeek.Monday, DayOfWeek.Friday]));
+            HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Friday]));
         new HabitRepository(_db).Add(habit);
         await ((IUnitOfWork)_db).SaveChangesAsync();
 
@@ -58,6 +58,74 @@ public class RepositoryTests : IAsyncLifetime
         Assert.Equal(new DateOnly(2026, 3, 1), loaded.StartDate);
         Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
         Assert.InRange(loaded.CreatedAt, habit.CreatedAt.AddSeconds(-1), habit.CreatedAt.AddSeconds(1));
+    }
+
+    public static TheoryData<string, HabitSchedule> EveryKindOfSchedule => new()
+    {
+        { "every week", HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Friday]) },
+        { "every day", HabitSchedule.Daily },
+        { "every 2nd week", HabitSchedule.Weekly([DayOfWeek.Sunday, DayOfWeek.Thursday], 2, new DateOnly(2026, 10, 7)) },
+        { "every 52nd week", HabitSchedule.Weekly([DayOfWeek.Saturday], 52, new DateOnly(2000, 1, 1)) },
+        { "every 3 days", HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10)) },
+        { "the last Saturday", HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Last, DayOfWeek.Saturday) },
+        { "the first Sunday", HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.First, DayOfWeek.Sunday) },
+        { "the 15th", HabitSchedule.MonthlyOnDate(15) },
+        { "the 31st", HabitSchedule.MonthlyOnDate(31) }
+    };
+
+    [Theory]
+    [MemberData(nameof(EveryKindOfSchedule))]
+    public async Task AHabit_KeepsItsScheduleRule_WhateverTheKind(string description, HabitSchedule schedule)
+    {
+        var habit = Habit.Create(_user, HabitTitle.Create(description), new DateOnly(2026, 3, 1), schedule: schedule);
+        new HabitRepository(_db).Add(habit);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        await using var other = FreshContext();
+        var loaded = await new HabitRepository(other).GetByIdAsync(_user, habit.Id, default);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(schedule, loaded.Schedule);
+        // The same rule, not just the same facts: both answer alike on every day of a year.
+        for (var day = new DateOnly(2026, 1, 1); day.Year == 2026; day = day.AddDays(1))
+            Assert.Equal(schedule.IsScheduledOn(day), loaded.Schedule.IsScheduledOn(day));
+    }
+
+    [Fact]
+    public async Task ChangingTheScheduleRule_IsSaved_AndLeavesNoFactOfTheOldKindBehind()
+    {
+        var habit = Habit.Create(_user, HabitTitle.Create("Read"), new DateOnly(2026, 3, 1),
+            schedule: HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10)));
+        var repository = new HabitRepository(_db);
+        repository.Add(habit);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        await using (var editing = FreshContext())
+        {
+            var toChange = await new HabitRepository(editing).GetByIdAsync(_user, habit.Id, default);
+            toChange!.Update(toChange.Title, null, HabitSchedule.MonthlyOnDate(15));
+            await ((IUnitOfWork)editing).SaveChangesAsync();
+        }
+
+        await using var other = FreshContext();
+        var loaded = await new HabitRepository(other).GetByIdAsync(_user, habit.Id, default);
+
+        Assert.Equal(HabitSchedule.MonthlyOnDate(15), loaded!.Schedule);
+        Assert.Null(loaded.Schedule.Anchor); // the old rule's anchor is gone (the check constraint would refuse it)
+        Assert.Equal(1, loaded.Schedule.Interval);
+    }
+
+    [Fact]
+    public async Task TheWeekdayBitsInTheDatabase_StillStartWithSundayAsBitZero()
+    {
+        var habit = Habit.Create(_user, HabitTitle.Create("Read"), new DateOnly(2026, 3, 1),
+            schedule: HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday]));
+        new HabitRepository(_db).Add(habit);
+        await ((IUnitOfWork)_db).SaveChangesAsync();
+
+        var stored = await Sql.ScalarAsync(_db, "SELECT \"ScheduleWeekdays\" FROM \"Habits\" WHERE \"Id\" = @p0", habit.Id);
+
+        Assert.Equal(62, stored); // Monday to Friday, as before the schedule became a rule
     }
 
     [Fact]

@@ -269,7 +269,7 @@ public class HabitsApiTests
     }
 
     [Fact]
-    public async Task Update_TheScheduleIsRequired_AnUpdateReplacesTheWholeHabit()
+    public async Task Update_TheRuleIsRequired_AnUpdateReplacesTheWholeHabit()
     {
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read", [1]);
@@ -277,7 +277,7 @@ public class HabitsApiTests
         var response = await user.Client.PutAsync($"/api/habits/{id}", new { title = "Run" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("schedule", await response.ErrorKeysAsync());
+        Assert.Contains("recurrence", await response.ErrorKeysAsync()); // or, deprecated, "schedule"
         Assert.Equal("Read", (await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync()).GetProperty("title").GetString());
     }
 

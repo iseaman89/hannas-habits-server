@@ -43,7 +43,77 @@ public class SchemaTests : IAsyncLifetime
         if (accepted)
             await insert();
         else
-            Assert.Equal(("23514", "CK_Habits_Schedule"), Describe(await Sql.RejectedAsync(insert)));
+            Assert.Equal(("23514", "CK_Habits_ScheduleWeekdays"), Describe(await Sql.RejectedAsync(insert)));
+    }
+
+    // The kinds of schedule (0 weekly, 1 every N days, 2 monthly on a weekday, 3 monthly on a date) and the facts each
+    // one has: a row that says "every 3 days" without a day to count from means nothing and is refused.
+    [Theory]
+    [InlineData(0, 62, 1, null, null, null)]                    // weekly, every week (Monday to Friday)
+    [InlineData(0, 65, 2, "2026-10-05", null, null)]            // every 2nd week, counted from the week of the anchor
+    [InlineData(0, 1, 52, "2026-10-05", null, null)]            // the longest weekly interval
+    [InlineData(1, 127, 3, "2026-10-10", null, null)]           // every 3 days
+    [InlineData(1, 127, 2, "2000-01-01", null, null)]           // ... the shortest, the earliest anchor
+    [InlineData(1, 127, 365, "2100-12-31", null, null)]         // ... the longest, the latest anchor
+    [InlineData(2, 64, 1, null, 5, null)]                       // the last Saturday
+    [InlineData(2, 2, 1, null, 1, null)]                        // the first Monday
+    [InlineData(3, 127, 1, null, null, 15)]                     // the 15th
+    [InlineData(3, 127, 1, null, null, 31)]                     // the 31st (the last day of a shorter month)
+    public async Task Habits_EachKindOfScheduleIsAcceptedWithItsOwnFacts(
+        int kind, int weekdays, int interval, string? anchor, int? occurrence, int? dayOfMonth)
+    {
+        await Sql.InsertHabitAsync(
+            _db, _user, schedule: weekdays, kind: kind, interval: interval, anchor: anchor, occurrence: occurrence,
+            dayOfMonth: dayOfMonth);
+    }
+
+    [Theory]
+    [InlineData(4, 127, 1, null, null, null)]                   // no such kind
+    [InlineData(-1, 127, 1, null, null, null)]
+    [InlineData(0, 62, 0, null, null, null)]                    // weekly: interval 0
+    [InlineData(0, 62, 53, "2026-10-05", null, null)]           // ... more than a year of weeks
+    [InlineData(0, 62, 2, null, null, null)]                    // ... every 2nd week without a week to count from
+    [InlineData(0, 62, 1, "2026-10-05", null, null)]            // ... every week with an anchor (it would mean nothing)
+    [InlineData(0, 62, 1, null, 1, null)]                       // ... with an occurrence
+    [InlineData(0, 62, 1, null, null, 15)]                      // ... with a day of the month
+    [InlineData(1, 127, 1, "2026-10-10", null, null)]           // every N days: 1 is the daily schedule
+    [InlineData(1, 127, 366, "2026-10-10", null, null)]         // ... more than a year
+    [InlineData(1, 127, 3, null, null, null)]                   // ... without an anchor
+    [InlineData(1, 62, 3, "2026-10-10", null, null)]            // ... that depends on a weekday
+    [InlineData(2, 127, 1, null, 5, null)]                      // monthly on a weekday: more than one weekday
+    [InlineData(2, 64, 1, null, 0, null)]                       // ... occurrence 0
+    [InlineData(2, 64, 1, null, 6, null)]                       // ... occurrence 6 (there is no "fifth")
+    [InlineData(2, 64, 1, null, null, null)]                    // ... without an occurrence
+    [InlineData(2, 64, 2, null, 5, null)]                       // ... with an interval
+    [InlineData(2, 64, 1, "2026-10-10", 5, null)]               // ... with an anchor
+    [InlineData(3, 127, 1, null, null, 0)]                      // monthly on a date: day 0
+    [InlineData(3, 127, 1, null, null, 32)]                     // ... day 32
+    [InlineData(3, 127, 1, null, null, null)]                   // ... without a day
+    [InlineData(3, 62, 1, null, null, 15)]                      // ... that depends on a weekday
+    [InlineData(3, 127, 1, null, 1, 15)]                        // ... with an occurrence
+    public async Task Habits_AScheduleWithTheWrongFactsForItsKindIsRefused(
+        int kind, int weekdays, int interval, string? anchor, int? occurrence, int? dayOfMonth)
+    {
+        var insert = () => Sql.InsertHabitAsync(
+            _db, _user, schedule: weekdays, kind: kind, interval: interval, anchor: anchor, occurrence: occurrence,
+            dayOfMonth: dayOfMonth);
+
+        Assert.Equal(("23514", "CK_Habits_ScheduleRule"), Describe(await Sql.RejectedAsync(insert)));
+    }
+
+    [Theory]
+    [InlineData("2000-01-01", true)]
+    [InlineData("2100-12-31", true)]
+    [InlineData("1999-12-31", false)]
+    [InlineData("2101-01-01", false)]
+    public async Task Habits_AnAnchorIsPlausible(string anchor, bool accepted)
+    {
+        var insert = () => Sql.InsertHabitAsync(_db, _user, schedule: 127, kind: 1, interval: 3, anchor: anchor);
+
+        if (accepted)
+            await insert();
+        else
+            Assert.Equal(("23514", "CK_Habits_ScheduleAnchor"), Describe(await Sql.RejectedAsync(insert)));
     }
 
     [Theory]
@@ -251,7 +321,12 @@ public class SchemaTests : IAsyncLifetime
         (string, string) TypeOf(string column) => (columns[column].Type, columns[column].Nullable);
 
         Assert.Equal(("date", "NO"), TypeOf("Habits.StartDate"));
-        Assert.Equal(("integer", "NO"), TypeOf("Habits.Schedule"));
+        Assert.Equal(("integer", "NO"), TypeOf("Habits.ScheduleKind"));
+        Assert.Equal(("integer", "NO"), TypeOf("Habits.ScheduleWeekdays"));
+        Assert.Equal(("integer", "NO"), TypeOf("Habits.ScheduleInterval"));
+        Assert.Equal(("date", "YES"), TypeOf("Habits.ScheduleAnchor"));
+        Assert.Equal(("integer", "YES"), TypeOf("Habits.ScheduleOccurrence"));
+        Assert.Equal(("integer", "YES"), TypeOf("Habits.ScheduleDayOfMonth"));
         Assert.Equal(("character varying", "NO"), TypeOf("Habits.Title"));
         Assert.Equal(("character varying", "YES"), TypeOf("Habits.Description"));
         Assert.Equal(("date", "NO"), TypeOf("HabitRecords.Date"));
@@ -272,6 +347,11 @@ public class SchemaTests : IAsyncLifetime
         // No default for the start date: one that the check constraint rejects (0001-01-01) would be a trap for any insert
         // that forgets the column.
         Assert.False(columns["Habits.StartDate"].HasDefault);
+
+        // The migration filled the columns of the rows that existed and dropped its defaults again: the application
+        // writes the whole schedule, and the model (which has no defaults) is what the next migration is compared with.
+        Assert.False(columns["Habits.ScheduleKind"].HasDefault);
+        Assert.False(columns["Habits.ScheduleInterval"].HasDefault);
     }
 
     private static (string SqlState, string? Constraint) Describe(PostgresException exception)

@@ -2,7 +2,9 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Habits.Commands.CreateHabit;
 using HannasHabits.Application.Habits.Commands.DeleteHabit;
 using HannasHabits.Application.Habits.Commands.UpdateHabit;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Application.Tests.Fakes;
+using HannasHabits.Domain.Enums;
 using HannasHabits.Domain.Exceptions;
 using HannasHabits.Domain.ValueObjects;
 using Microsoft.Extensions.Time.Testing;
@@ -55,6 +57,68 @@ public class CreateHabitCommandHandlerTests
     }
 
     [Fact]
+    public async Task ARecurrence_BecomesTheSchedule_AndIsReturnedAsTheSame()
+    {
+        var dto = await Handle(new CreateHabitCommand
+        {
+            Title = "Clean the flat",
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Occurrence = WeekdayOccurrence.Last, Weekday = DayOfWeek.Saturday }
+        });
+
+        var expected = HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Last, DayOfWeek.Saturday);
+        Assert.Equal(expected, Assert.Single(_habits.Habits).Schedule);
+        Assert.Equal(ScheduleKind.MonthlyOnWeekday, dto.Recurrence.Kind);
+        Assert.Equal(WeekdayOccurrence.Last, dto.Recurrence.Occurrence);
+        Assert.Equal(DayOfWeek.Saturday, dto.Recurrence.Weekday);
+        Assert.Empty(dto.Recurrence.Weekdays);
+        Assert.Equal([DayOfWeek.Saturday], dto.Schedule); // the deprecated list: the weekdays the rule can fall on
+    }
+
+    [Fact]
+    public async Task ARecurrenceWins_WhenTheDeprecatedScheduleIsSentToo()
+    {
+        await Handle(new CreateHabitCommand
+        {
+            Title = "Read",
+            Schedule = [DayOfWeek.Monday],
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 }
+        });
+
+        Assert.Equal(HabitSchedule.MonthlyOnDate(15), Assert.Single(_habits.Habits).Schedule);
+    }
+
+    [Fact]
+    public async Task ARuleThatCountsFromADay_WithoutOne_CountsFromTheStartDate()
+    {
+        var dto = await Handle(new CreateHabitCommand
+        {
+            Title = "Water plants",
+            StartDate = new DateOnly(2026, 10, 12),
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 4 }
+        });
+
+        Assert.Equal(new DateOnly(2026, 10, 12), dto.Recurrence.Anchor);
+        Assert.Equal(HabitSchedule.EveryNDays(4, new DateOnly(2026, 10, 12)), Assert.Single(_habits.Habits).Schedule);
+    }
+
+    [Fact]
+    public async Task ARuleThatCountsFromADay_WithOne_KeepsIt_NotTheStartDate()
+    {
+        var dto = await Handle(new CreateHabitCommand
+        {
+            Title = "Gym",
+            StartDate = new DateOnly(2026, 10, 12),
+            Recurrence = new RecurrenceInput
+            {
+                Kind = ScheduleKind.Weekly, Weekdays = [DayOfWeek.Monday], Interval = 2, Anchor = new DateOnly(2026, 10, 5)
+            }
+        });
+
+        Assert.Equal(new DateOnly(2026, 10, 5), dto.Recurrence.Anchor);
+        Assert.Equal(2, dto.Recurrence.Interval);
+    }
+
+    [Fact]
     public async Task TheClientsStartDateIsUsed_WhateverTheServerClockSays()
     {
         var dto = await Handle(new CreateHabitCommand { Title = "Read", StartDate = new DateOnly(2026, 11, 2) });
@@ -93,6 +157,14 @@ public class CreateHabitCommandHandlerTests
             new CreateHabitCommand { Title = "Read", StartDate = new DateOnly(1999, 12, 31) }));
         await Assert.ThrowsAsync<DomainException>(() => Handle(
             new CreateHabitCommand { Title = "Read", Description = new string('a', 501) }));
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
+        {
+            Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 1 }
+        }));
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new CreateHabitCommand
+        {
+            Title = "Read", Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 32 }
+        }));
 
         Assert.Empty(_habits.Habits);
         Assert.Equal(0, _unitOfWork.SaveCount);
@@ -139,6 +211,100 @@ public class UpdateHabitCommandHandlerTests
 
         Assert.Equal(new DateOnly(2026, 8, 15), habit.StartDate);
         Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task ARecurrence_ReplacesTheWholeRule_AndNothingOfTheOldKindIsLeft()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Read", schedule: HabitSchedule.EveryNDays(3, new DateOnly(2026, 10, 10)));
+        _habits.Habits.Add(habit);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id,
+            Title = "Read",
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 1 }
+        });
+
+        Assert.Equal(HabitSchedule.MonthlyOnDate(1), habit.Schedule);
+        Assert.Null(habit.Schedule.Anchor);
+        Assert.Equal(1, _unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task TheAnchorSentBack_KeepsTheRhythm_WhileTheStartDateMoves()
+    {
+        var anchor = new DateOnly(2026, 10, 7);
+        var habit = Make.NewHabit(_user.UserId, "Gym", start: new DateOnly(2026, 10, 1),
+            schedule: HabitSchedule.Weekly([DayOfWeek.Monday], 2, anchor));
+        _habits.Habits.Add(habit);
+        var dueBefore = DueDays(habit.Schedule);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id,
+            Title = "Gym",
+            StartDate = new DateOnly(2026, 8, 1),
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.Weekly, Weekdays = [DayOfWeek.Monday], Interval = 2, Anchor = anchor }
+        });
+
+        Assert.Equal(new DateOnly(2026, 8, 1), habit.StartDate);
+        Assert.Equal(anchor, habit.Schedule.Anchor);
+        Assert.Equal(dueBefore, DueDays(habit.Schedule));
+    }
+
+    private static DateOnly[] DueDays(HabitSchedule schedule)
+        => Enumerable.Range(0, 120).Select(offset => new DateOnly(2026, 8, 1).AddDays(offset)).Where(schedule.IsScheduledOn).ToArray();
+
+    [Theory]
+    [InlineData("2026-08-01", "2026-08-01")]  // the new start date
+    [InlineData(null, "2026-10-01")]          // the one the habit keeps
+    public async Task ARuleThatCountsFromADay_WithoutOne_CountsFromTheStartDateTheHabitHasAfterTheUpdate(
+        string? sentStartDate, string expectedAnchor)
+    {
+        var habit = Make.NewHabit(_user.UserId, "Water plants", start: new DateOnly(2026, 10, 1));
+        _habits.Habits.Add(habit);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id,
+            Title = "Water plants",
+            StartDate = sentStartDate is null ? null : DateOnly.Parse(sentStartDate),
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 4 }
+        });
+
+        Assert.Equal(DateOnly.Parse(expectedAnchor), habit.Schedule.Anchor);
+    }
+
+    [Fact]
+    public async Task ARecurrenceWins_WhenTheDeprecatedScheduleIsSentToo()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Read");
+        _habits.Habits.Add(habit);
+
+        await Handle(new UpdateHabitCommand
+        {
+            Id = habit.Id,
+            Title = "Read",
+            Schedule = [DayOfWeek.Monday],
+            Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 }
+        });
+
+        Assert.Equal(HabitSchedule.MonthlyOnDate(15), habit.Schedule);
+    }
+
+    [Fact]
+    public async Task WithNeitherARecurrenceNorAScheduleThereIsNoRule_AndNothingChanges()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Read", schedule: HabitSchedule.MonthlyOnDate(15));
+        _habits.Habits.Add(habit);
+
+        // The validator answers first; without it the handler must not invent a rule or half-apply the update.
+        await Assert.ThrowsAsync<DomainException>(() => Handle(new UpdateHabitCommand { Id = habit.Id, Title = "Changed" }));
+
+        Assert.Equal("Read", habit.Title.Value);
+        Assert.Equal(HabitSchedule.MonthlyOnDate(15), habit.Schedule);
+        Assert.Equal(0, _unitOfWork.SaveCount);
     }
 
     [Fact]

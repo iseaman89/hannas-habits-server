@@ -59,6 +59,45 @@ public class OpenApiContractTests
         Assert.False(IsNullable("HabitOverviewDto", "title")); // string
     }
 
+    [Fact]
+    public async Task TheRecurrenceFacts_AreNullableExactlyWhereTheyMayBeAbsent()
+    {
+        var document = await (await _api.CreateClient().GetAsync("/swagger/v1/swagger.json")).ReadJsonAsync();
+        var recurrence = document.GetProperty("components").GetProperty("schemas").GetProperty("RecurrenceDto");
+        var properties = recurrence.GetProperty("properties");
+
+        bool IsNullable(string property)
+            => properties.GetProperty(property).TryGetProperty("nullable", out var nullable) && nullable.GetBoolean();
+
+        // Every fact is always there (required); the ones that belong to one kind only are null for the others.
+        Assert.Equal(
+            ["anchor", "dayOfMonth", "interval", "kind", "occurrence", "weekday", "weekdays"],
+            recurrence.GetProperty("required").EnumerateArray().Select(name => name.GetString()!).Order());
+        Assert.False(IsNullable("kind"));
+        Assert.False(IsNullable("weekdays"));
+        Assert.False(IsNullable("interval"));
+        Assert.True(IsNullable("anchor"));
+        Assert.True(IsNullable("occurrence"));
+        Assert.True(IsNullable("weekday"));
+        Assert.True(IsNullable("dayOfMonth"));
+    }
+
+    [Fact]
+    public async Task TheKindAndTheOccurrence_AreStringEnumsInTheDocument_WhileWeekdaysStayNumbers()
+    {
+        var document = await (await _api.CreateClient().GetAsync("/swagger/v1/swagger.json")).ReadJsonAsync();
+        var schemas = document.GetProperty("components").GetProperty("schemas");
+
+        string[] Values(string schema) => schemas.GetProperty(schema).GetProperty("enum").EnumerateArray().Select(v => v.ToString()).ToArray();
+
+        Assert.Equal(["weekly", "everyNDays", "monthlyOnWeekday", "monthlyOnDate"], Values("ScheduleKind"));
+        Assert.Equal(["first", "second", "third", "fourth", "last"], Values("WeekdayOccurrence"));
+        Assert.Equal("string", schemas.GetProperty("ScheduleKind").GetProperty("type").GetString());
+        // The contract of every other enum is untouched: a day of the week and a mood are numbers.
+        Assert.Equal("integer", schemas.GetProperty("DayOfWeek").GetProperty("type").GetString());
+        Assert.Equal("integer", schemas.GetProperty("Mood").GetProperty("type").GetString());
+    }
+
     // ---- real answers against the schemas ----
 
     private static async Task AssertFitsAsync(OpenApiContract contract, string method, string pathTemplate, HttpResponseMessage response, HttpStatusCode expected)
@@ -108,6 +147,33 @@ public class OpenApiContractTests
         var overview = await user.Client.GetAsync("/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
         await AssertFitsAsync(contract, "GET", "/api/habits/overview", overview, HttpStatusCode.OK);
         Assert.Equal(2, (await overview.ReadJsonAsync()).GetArrayLength()); // the check above was not run on an empty list
+    }
+
+    [Fact]
+    public async Task TheHabitAnswers_FitTheirSchema_ForEveryKindOfRecurrence()
+    {
+        var contract = await OpenApiContract.LoadAsync(_api);
+        var user = await TestUser.RegisterAsync(_api);
+        object[] rules =
+        [
+            new { kind = "weekly", weekdays = new[] { 1, 4 }, interval = 2, anchor = "2026-10-05" },
+            new { kind = "everyNDays", interval = 3, anchor = "2026-10-10" },
+            new { kind = "monthlyOnWeekday", occurrence = "last", weekday = 6 },
+            new { kind = "monthlyOnDate", dayOfMonth = 31 }
+        ];
+
+        foreach (var (rule, index) in rules.Select((rule, index) => (rule, index)))
+        {
+            var create = await user.Client.PostAsync("/api/habits", new { title = $"Rule {index}", startDate = "2026-10-01", recurrence = rule });
+            await AssertFitsAsync(contract, "POST", "/api/habits", create, HttpStatusCode.Created);
+            var id = (await create.ReadJsonAsync()).GetProperty("id").GetGuid();
+            await AssertFitsAsync(contract, "GET", "/api/habits/{id}", await user.Client.GetAsync($"/api/habits/{id}"), HttpStatusCode.OK);
+        }
+
+        await AssertFitsAsync(contract, "GET", "/api/habits", await user.Client.GetAsync("/api/habits"), HttpStatusCode.OK);
+        var overview = await user.Client.GetAsync("/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
+        await AssertFitsAsync(contract, "GET", "/api/habits/overview", overview, HttpStatusCode.OK);
+        Assert.Equal(rules.Length, (await overview.ReadJsonAsync()).GetArrayLength());
     }
 
     [Fact]

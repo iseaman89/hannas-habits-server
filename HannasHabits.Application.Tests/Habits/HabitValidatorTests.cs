@@ -4,6 +4,8 @@ using HannasHabits.Application.HabitRecords.Queries.GetRecordsByHabit;
 using HannasHabits.Application.Habits.Commands.CreateHabit;
 using HannasHabits.Application.Habits.Commands.UpdateHabit;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Domain.Enums;
 
 namespace HannasHabits.Application.Tests.Habits;
 
@@ -179,18 +181,166 @@ public class UpdateHabitCommandValidatorTests
     }
 
     [Fact]
-    public void TheSchedule_IsRequired_BecauseAnUpdateReplacesTheWholeHabit()
+    public void TheRule_IsRequired_BecauseAnUpdateReplacesTheWholeHabit_ByRecurrenceOrByTheDeprecatedSchedule()
     {
         var command = Valid();
 
-        command.Schedule = null!;
-        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Schedule);
+        command.Schedule = null;
+        command.Recurrence = null;
+        _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Recurrence);
 
         command.Schedule = [];
         _validator.TestValidate(command).ShouldHaveValidationErrorFor(x => x.Schedule);
 
         command.Schedule = [(DayOfWeek)(-1)];
         _validator.TestValidate(command).ShouldHaveValidationErrorFor("Schedule[0]");
+
+        command.Schedule = null;
+        command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15 };
+        _validator.TestValidate(command).ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void ARecurrence_IsCheckedWhereverItIsSent_AndTheDeprecatedListThenIsNotLookedAt()
+    {
+        var command = Valid();
+        command.Schedule = [];
+        command.Recurrence = new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 1 };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor("Recurrence.Interval");
+        result.ShouldNotHaveValidationErrorFor(x => x.Schedule);
+    }
+}
+
+public class RecurrenceInputValidatorTests
+{
+    private readonly RecurrenceInputValidator _validator = new();
+
+    private static readonly DateOnly Anchor = new(2026, 10, 7);
+
+    private static RecurrenceInput Weekly(int? interval = null, DateOnly? anchor = null, params DayOfWeek[] days)
+        => new() { Kind = ScheduleKind.Weekly, Weekdays = days.Length == 0 ? [DayOfWeek.Monday] : days.ToList(), Interval = interval, Anchor = anchor };
+
+    [Fact]
+    public void AValidRuleOfEveryKind_Passes()
+    {
+        _validator.TestValidate(Weekly()).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(Weekly(2, Anchor)).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(Weekly(2)).ShouldNotHaveAnyValidationErrors(); // the anchor is filled in
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 3 }).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Occurrence = WeekdayOccurrence.Last, Weekday = DayOfWeek.Saturday })
+            .ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 31 }).ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void TheKind_IsRequired_AndMustBeAKnownOne()
+    {
+        _validator.TestValidate(new RecurrenceInput()).ShouldHaveValidationErrorFor(x => x.Kind);
+        _validator.TestValidate(new RecurrenceInput { Kind = (ScheduleKind)9 }).ShouldHaveValidationErrorFor(x => x.Kind);
+    }
+
+    [Fact]
+    public void Weekly_NeedsDays_EachOfThemADayOfTheWeek()
+    {
+        var none = new RecurrenceInput { Kind = ScheduleKind.Weekly };
+        var empty = new RecurrenceInput { Kind = ScheduleKind.Weekly, Weekdays = [] };
+        var wrong = new RecurrenceInput { Kind = ScheduleKind.Weekly, Weekdays = [DayOfWeek.Monday, (DayOfWeek)7] };
+
+        _validator.TestValidate(none).ShouldHaveValidationErrorFor(x => x.Weekdays);
+        _validator.TestValidate(empty).ShouldHaveValidationErrorFor(x => x.Weekdays);
+        _validator.TestValidate(wrong).ShouldHaveValidationErrorFor("Weekdays[1]");
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(52, true)]
+    [InlineData(0, false)]
+    [InlineData(53, false)]
+    [InlineData(-1, false)]
+    public void Weekly_TheIntervalIsInWeeks_UpToAYear(int interval, bool valid)
+    {
+        var result = _validator.TestValidate(Weekly(interval, Anchor));
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Interval);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Interval);
+    }
+
+    [Theory]
+    [InlineData(2, true)]
+    [InlineData(365, true)]
+    [InlineData(1, false)]  // every day is the daily schedule
+    [InlineData(366, false)]
+    public void EveryNDays_TheIntervalIsRequired_AndBetween2And365(int interval, bool valid)
+    {
+        var result = _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = interval });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Interval);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Interval);
+
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.EveryNDays }).ShouldHaveValidationErrorFor(x => x.Interval);
+    }
+
+    [Fact]
+    public void MonthlyOnAWeekday_NeedsTheOccurrenceAndTheWeekday()
+    {
+        var onlyWeekday = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Weekday = DayOfWeek.Monday };
+        var onlyOccurrence = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Occurrence = WeekdayOccurrence.First };
+        var wrong = new RecurrenceInput { Kind = ScheduleKind.MonthlyOnWeekday, Occurrence = (WeekdayOccurrence)6, Weekday = (DayOfWeek)7 };
+
+        _validator.TestValidate(onlyWeekday).ShouldHaveValidationErrorFor(x => x.Occurrence);
+        _validator.TestValidate(onlyOccurrence).ShouldHaveValidationErrorFor(x => x.Weekday);
+        _validator.TestValidate(wrong).ShouldHaveValidationErrorFor(x => x.Occurrence);
+        _validator.TestValidate(wrong).ShouldHaveValidationErrorFor(x => x.Weekday);
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(31, true)]
+    [InlineData(0, false)]
+    [InlineData(32, false)]
+    public void MonthlyOnADate_TheDayOfTheMonthIsRequired_AndBetween1And31(int day, bool valid)
+    {
+        var result = _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = day });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.DayOfMonth);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.DayOfMonth);
+
+        _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.MonthlyOnDate }).ShouldHaveValidationErrorFor(x => x.DayOfMonth);
+    }
+
+    [Theory]
+    [InlineData(2000, 1, 1, true)]
+    [InlineData(2100, 12, 31, true)]
+    [InlineData(1999, 12, 31, false)]
+    [InlineData(2101, 1, 1, false)]
+    public void TheAnchor_IsOptional_ButInsideThePlausibleRange(int year, int month, int day, bool valid)
+    {
+        var result = _validator.TestValidate(new RecurrenceInput { Kind = ScheduleKind.EveryNDays, Interval = 3, Anchor = new DateOnly(year, month, day) });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Anchor);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Anchor);
+    }
+
+    [Fact]
+    public void AFactThatDoesNotBelongToTheKind_IsNotChecked()
+    {
+        var input = new RecurrenceInput
+        {
+            Kind = ScheduleKind.MonthlyOnDate, DayOfMonth = 15, Interval = 9999, Weekdays = [], Occurrence = (WeekdayOccurrence)99
+        };
+
+        _validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
     }
 }
 
@@ -257,6 +407,18 @@ public class GetHabitsOverviewQueryValidatorTests
         _validator.TestValidate(new GetHabitsOverviewQuery(Day, Day, null)).ShouldNotHaveAnyValidationErrors();
         _validator.TestValidate(new GetHabitsOverviewQuery(Day, Day.AddDays(5), Day)).ShouldNotHaveAnyValidationErrors();
         _validator.TestValidate(new GetHabitsOverviewQuery(Day, Day.AddDays(-1), null)).ShouldHaveValidationErrorFor(x => x.To);
+    }
+
+    [Fact]
+    public void TheRange_IsLimitedToALeapYear_BecauseEveryDueDayOfItIsListed()
+    {
+        var longest = new GetHabitsOverviewQuery(Day, Day.AddDays(GetHabitsOverviewQueryValidator.MaxRangeDays - 1), null);
+        var tooLong = new GetHabitsOverviewQuery(Day, Day.AddDays(GetHabitsOverviewQueryValidator.MaxRangeDays), null);
+
+        Assert.Equal(366, GetHabitsOverviewQueryValidator.MaxRangeDays);
+        _validator.TestValidate(longest).ShouldNotHaveAnyValidationErrors();
+        _validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(x => x.To);
+        _validator.TestValidate(new GetHabitsOverviewQuery(DateOnly.MinValue, DateOnly.MaxValue, null)).ShouldHaveValidationErrorFor(x => x.To);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using HannasHabits.Application.Habits;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +22,8 @@ public class HabitQueries : IHabitQueries
         => _context.Habits
             .AsNoTracking()
             .Where(h => h.UserId == userId)
-            .Select(h => new HabitListItemDto(h.Id, h.Title.Value, h.Description, h.Schedule.Days))
+            .Select(h => new HabitListItemDto(
+                h.Id, h.Title.Value, h.Description, h.Schedule.Days, RecurrenceDto.From(h.Schedule)))
             .ToListAsync(cancellationToken);
 
     public Task<HabitDetailsDto?> GetByIdAsync(Guid userId, Guid habitId, CancellationToken cancellationToken)
@@ -29,7 +31,8 @@ public class HabitQueries : IHabitQueries
             .AsNoTracking()
             .Where(h => h.Id == habitId && h.UserId == userId)
             .Select(h => new HabitDetailsDto(
-                h.Id, h.Title.Value, h.Description, h.Schedule.Days, h.StartDate, h.CreatedAt))
+                h.Id, h.Title.Value, h.Description, h.Schedule.Days, RecurrenceDto.From(h.Schedule), h.StartDate,
+                h.CreatedAt))
             .FirstOrDefaultAsync(cancellationToken);
 
     // Only the dates of the records are read, not the record entities: the streak needs the whole history (it can reach
