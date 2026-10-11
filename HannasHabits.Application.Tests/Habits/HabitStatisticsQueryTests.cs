@@ -100,6 +100,34 @@ public class GetHabitsStatisticsQueryHandlerTests
 
         Assert.Null(gym.LastDoneOn);
         Assert.Equal(0, gym.Done);
+        Assert.Equal(0, gym.CurrentStreak);
+        Assert.Equal(0, gym.LongestStreak);
+    }
+
+    [Fact]
+    public async Task TheStreaks_AreAsOfTheGivenDay_AndDoNotDependOnTheRange()
+    {
+        // Thu 1, Mon 5, Thu 8 done (three due days in a row), Mon 12 missed, Thu 15 done.
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", D(1, 1), MondaysAndThursdays,
+            completed: [D(10, 1), D(10, 5), D(10, 8), D(10, 15)]));
+
+        var inOctober = Assert.Single(await Handle(D(10, 1), D(10, 31), asOf: D(10, 15)));
+        var inJanuary = Assert.Single(await Handle(D(1, 1), D(1, 31), asOf: D(10, 15)));
+
+        Assert.Equal((1, 3), (inOctober.CurrentStreak, inOctober.LongestStreak));
+        Assert.Equal((1, 3), (inJanuary.CurrentStreak, inJanuary.LongestStreak));
+    }
+
+    [Fact]
+    public async Task TheLongestStreak_IgnoresWhatHappensAfterAsOf()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Gym", D(1, 1), MondaysAndThursdays,
+            completed: [D(10, 1), D(10, 5), D(10, 8), D(10, 12), D(10, 15)]));
+
+        // As of Monday 5: only the first two due days were there to be done.
+        var gym = Assert.Single(await Handle(D(10, 1), D(10, 31), asOf: D(10, 5)));
+
+        Assert.Equal((2, 2), (gym.CurrentStreak, gym.LongestStreak));
     }
 
     [Fact]
@@ -115,6 +143,22 @@ public class GetHabitsStatisticsQueryHandlerTests
         Assert.Equal(2, run.Planned);
         Assert.Equal(1, run.Done);
         Assert.Equal(D(10, 13), run.LastDoneOn);
+    }
+
+    [Fact]
+    public async Task AQuotaHabit_HasItsStreaksInWeeks()
+    {
+        // Twice a week: three met weeks in September (1-2, 8-9, 15-16), a week without, then the weeks of 28 Sep and
+        // 5 Oct are met; the running week of 12 Oct has one so far.
+        _repository.Habits.Add(Make.NewHabit(_user.UserId, "Run", D(1, 1), HabitSchedule.TimesPerWeek(2),
+            completed: [D(9, 1), D(9, 2), D(9, 8), D(9, 9), D(9, 15), D(9, 16),
+                D(9, 29), D(10, 1), D(10, 6), D(10, 8), D(10, 13)]));
+
+        var run = Assert.Single(await Handle(D(10, 1), D(10, 31), asOf: D(10, 15)));
+
+        Assert.Equal(CountingUnit.Weeks, run.Unit);
+        Assert.Equal(2, run.CurrentStreak);
+        Assert.Equal(3, run.LongestStreak);
     }
 
     [Fact]
@@ -147,6 +191,26 @@ public class GetHabitsStatisticsQueryHandlerTests
                 Assert.Equal(1, part.Done);
                 Assert.Equal(D(10, 8), part.LastDoneOn);
             });
+    }
+
+    [Fact]
+    public async Task APart_HasItsOwnStreaks_OnItsOwnDays()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Sport", D(1, 1), MondaysAndThursdays);
+        var legs = habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        var arms = habit.AddSubHabit(HabitTitle.Create("Arms"), WeekdaySet.Of([DayOfWeek.Thursday]));
+        // Legs on three Mondays in a row, then Monday 12 missed. Arms on Thursdays 1 and 8; Thursday 15 is not there yet.
+        foreach (var monday in new[] { D(9, 21), D(9, 28), D(10, 5) })
+            habit.MarkSubHabitCompleted(legs.Id, monday);
+        foreach (var thursday in new[] { D(10, 1), D(10, 8) })
+            habit.MarkSubHabitCompleted(arms.Id, thursday);
+        _repository.Habits.Add(habit);
+
+        var sport = Assert.Single(await Handle(D(10, 1), D(10, 31), asOf: D(10, 14)));
+
+        Assert.Collection(sport.SubHabits,
+            part => Assert.Equal((0, 3), (part.CurrentStreak, part.LongestStreak)),
+            part => Assert.Equal((2, 2), (part.CurrentStreak, part.LongestStreak)));
     }
 
     [Fact]

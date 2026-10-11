@@ -142,6 +142,7 @@ Authorization: Bearer {{accessToken}}
 ### Statistics for the month: per habit and per part what was planned and done, and when it was last done - 200
 # planned = the due days up to asOf (asOf itself only once it is done); a quota counts weeks / months that ended in the
 # range (unit: days | weeks | months). lastDoneOn reaches outside the range. from/to required, at most 366 days apart.
+# currentStreak / longestStreak (in `unit`; a part's in days) are as of asOf over the whole history, not the range.
 GET {{host}}/api/habits/statistics?from=2026-10-01&to=2026-10-31&asOf={{date}}
 Authorization: Bearer {{accessToken}}
 

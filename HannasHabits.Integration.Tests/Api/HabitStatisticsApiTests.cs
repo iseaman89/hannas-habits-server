@@ -97,6 +97,42 @@ public class HabitStatisticsApiTests
 
         Assert.Equal(JsonValueKind.Null, item.GetProperty("lastDoneOn").ValueKind);
         Assert.Equal(0, item.GetProperty("done").GetInt32());
+        Assert.Equal(0, item.GetProperty("currentStreak").GetInt32());
+        Assert.Equal(0, item.GetProperty("longestStreak").GetInt32());
+    }
+
+    [Fact]
+    public async Task TheStreaks_AreAsOfTheGivenDay_AndDoNotDependOnTheRange()
+    {
+        var user = await NewUser();
+        var habit = await NewSport(user);
+        // Due Mon / Wed / Fri: Mon 5, Wed 7, Fri 9 done (a run of three), Mon 12 missed, Wed 14 done.
+        await user.MarkAsync(habit, "2026-10-05", "2026-10-07", "2026-10-09", "2026-10-14");
+
+        var october = ItemOf(await StatisticsAsync(user, "2026-10-01", "2026-10-31", asOf: "2026-10-14"), habit);
+        var september = ItemOf(await StatisticsAsync(user, "2026-09-01", "2026-09-30", asOf: "2026-10-14"), habit);
+
+        foreach (var item in new[] { october, september })
+        {
+            Assert.Equal(1, item.GetProperty("currentStreak").GetInt32());
+            Assert.Equal(3, item.GetProperty("longestStreak").GetInt32());
+        }
+    }
+
+    [Fact]
+    public async Task TheStreaks_OfTheOverview_AndTheStatistics_AreTheSameNumber()
+    {
+        var user = await NewUser();
+        var habit = await NewSport(user);
+        await user.MarkAsync(habit, "2026-10-05", "2026-10-07", "2026-10-09", "2026-10-12");
+
+        var statistics = ItemOf(await StatisticsAsync(user, "2026-10-01", "2026-10-31", asOf: "2026-10-13"), habit);
+        var overview = await user.Client.GetAsync("/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf=2026-10-13");
+        var overviewItem = ItemOf(await overview.ReadJsonAsync(), habit);
+
+        Assert.Equal(4, statistics.GetProperty("currentStreak").GetInt32());
+        Assert.Equal(
+            overviewItem.GetProperty("currentStreak").GetInt32(), statistics.GetProperty("currentStreak").GetInt32());
     }
 
     [Fact]
@@ -114,6 +150,42 @@ public class HabitStatisticsApiTests
         Assert.Equal(2, item.GetProperty("planned").GetInt32());
         Assert.Equal(1, item.GetProperty("done").GetInt32());
         Assert.Equal("2026-10-13", item.GetProperty("lastDoneOn").GetString());
+    }
+
+    [Fact]
+    public async Task AQuotaHabit_HasItsStreaksInWeeks()
+    {
+        var user = await NewUser();
+        var habit = await user.CreateHabitAsync("Run", startDate: "2026-09-01",
+            recurrence: new { kind = "timesPerWeek", times = 2 });
+        // Three met weeks in September, a week without, then the weeks of 28 Sep and 5 Oct; the running week has one.
+        await user.MarkAsync(habit, "2026-09-01", "2026-09-02", "2026-09-08", "2026-09-09", "2026-09-15", "2026-09-16",
+            "2026-09-29", "2026-10-01", "2026-10-06", "2026-10-08", "2026-10-13");
+
+        var item = ItemOf(await StatisticsAsync(user, "2026-10-01", "2026-10-31", asOf: "2026-10-15"), habit);
+
+        Assert.Equal("weeks", item.GetProperty("unit").GetString());
+        Assert.Equal(2, item.GetProperty("currentStreak").GetInt32());
+        Assert.Equal(3, item.GetProperty("longestStreak").GetInt32());
+    }
+
+    [Fact]
+    public async Task APartHasItsOwnStreaks_OnItsOwnWeekdays()
+    {
+        var user = await NewUser();
+        var habit = await NewSport(user);
+        var legs = await user.AddSubHabitAsync(habit, "Legs", MondayDay);
+        var arms = await user.AddSubHabitAsync(habit, "Arms", WednesdayDay);
+        await user.TickSubHabitAsync(habit, "2026-10-05", legs);
+        await user.TickSubHabitAsync(habit, "2026-10-12", legs);
+        await user.TickSubHabitAsync(habit, "2026-10-07", arms);
+
+        var statistics = await StatisticsAsync(user, "2026-10-01", "2026-10-31", asOf: "2026-10-14");
+        var parts = ItemOf(statistics, habit).GetProperty("subHabits").EnumerateArray().ToArray();
+
+        // Legs on Mondays: 5 and 12 ticked, 28 September was not. Arms on Wednesdays: 7 ticked, the 14th is still open.
+        Assert.Equal((2, 2), (parts[0].GetProperty("currentStreak").GetInt32(), parts[0].GetProperty("longestStreak").GetInt32()));
+        Assert.Equal((1, 1), (parts[1].GetProperty("currentStreak").GetInt32(), parts[1].GetProperty("longestStreak").GetInt32()));
     }
 
     [Fact]

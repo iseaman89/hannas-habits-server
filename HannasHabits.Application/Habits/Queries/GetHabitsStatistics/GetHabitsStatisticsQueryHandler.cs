@@ -8,7 +8,7 @@ namespace HannasHabits.Application.Habits.Queries.GetHabitsStatistics;
 
 /// <summary>
 /// Reads the same facts as the overview (every habit with all its completed days and those of its parts) and lets the
-/// Domain's <see cref="HabitStatistics"/> count them: the handler only hands the dates over.
+/// Domain's <see cref="HabitStatistics"/> and <see cref="HabitStreak"/> count them: the handler only hands the dates over.
 /// </summary>
 public class GetHabitsStatisticsQueryHandler : IRequestHandler<GetHabitsStatisticsQuery, List<HabitStatisticsDto>>
 {
@@ -50,17 +50,21 @@ public class GetHabitsStatisticsQueryHandler : IRequestHandler<GetHabitsStatisti
             tally.Planned,
             tally.Done,
             HabitStatistics.LastDone(habit.CompletedDates, asOf),
+            HabitStreak.Current(habit.Schedule, habit.StartDate, completed, asOf),
+            HabitStreak.Longest(habit.Schedule, habit.StartDate, completed, asOf),
             habit.SubHabits.Select(part => PartOf(habit, part, from, to, asOf)).ToList());
     }
 
     private static SubHabitStatisticsDto PartOf(
         HabitWithCompletedDates habit, SubHabitWithCompletedDates part, DateOnly from, DateOnly to, DateOnly asOf)
     {
-        var tally = HabitStatistics.Tally(
-            habit.Schedule, habit.StartDate, part.Weekdays, part.CompletedDates.ToHashSet(), from, to, asOf);
+        var completed = part.CompletedDates.ToHashSet();
+        var tally = HabitStatistics.Tally(habit.Schedule, habit.StartDate, part.Weekdays, completed, from, to, asOf);
 
         return new SubHabitStatisticsDto(
             part.Id, part.Title, part.Weekdays.Days, tally.Planned, tally.Done,
-            HabitStatistics.LastDone(part.CompletedDates, asOf));
+            HabitStatistics.LastDone(part.CompletedDates, asOf),
+            HabitStreak.Current(habit.Schedule, habit.StartDate, part.Weekdays, completed, asOf),
+            HabitStreak.Longest(habit.Schedule, habit.StartDate, part.Weekdays, completed, asOf));
     }
 }

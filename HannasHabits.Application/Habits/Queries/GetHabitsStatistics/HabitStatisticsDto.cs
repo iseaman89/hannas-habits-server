@@ -18,13 +18,26 @@ namespace HannasHabits.Application.Habits.Queries.GetHabitsStatistics;
 /// The latest day the habit was done on or before the requested day - over the whole history, not just the range;
 /// <c>null</c> if it never was.
 /// </param>
+/// <param name="CurrentStreak">
+/// The streak as of the requested day, in <paramref name="Unit"/>s - the overview's number, independent of the range.
+/// </param>
+/// <param name="LongestStreak">
+/// The best streak the habit ever had up to the requested day, in <paramref name="Unit"/>s - over the whole history,
+/// not just the range; never less than <paramref name="CurrentStreak"/>.
+/// </param>
 /// <param name="SubHabits">The parts of the habit in the order they were added, each counted in days.</param>
 public record HabitStatisticsDto(
     Guid Id, string Title, RecurrenceDto Recurrence, DateOnly StartDate, CountingUnit Unit,
-    int Planned, int Done, DateOnly? LastDoneOn, IReadOnlyList<SubHabitStatisticsDto> SubHabits);
+    int Planned, int Done, DateOnly? LastDoneOn, int CurrentStreak, int LongestStreak,
+    IReadOnlyList<SubHabitStatisticsDto> SubHabits);
 
 /// <summary>One part's statistic: its due days of the range (the habit is due and the weekday is the part's) in days.</summary>
 /// <param name="Weekdays">The days of the week it is planned on (0 = Sunday ... 6 = Saturday).</param>
 /// <param name="LastDoneOn">The latest day the part was ticked on or before the requested day, over the whole history.</param>
+/// <param name="CurrentStreak">
+/// The part's due days in a row that were ticked as of the requested day, in days - independent of the range.
+/// </param>
+/// <param name="LongestStreak">The best such run up to the requested day over the whole history; never less than <paramref name="CurrentStreak"/>.</param>
 public record SubHabitStatisticsDto(
-    Guid Id, string Title, IReadOnlyList<DayOfWeek> Weekdays, int Planned, int Done, DateOnly? LastDoneOn);
+    Guid Id, string Title, IReadOnlyList<DayOfWeek> Weekdays, int Planned, int Done, DateOnly? LastDoneOn,
+    int CurrentStreak, int LongestStreak);
