@@ -63,4 +63,57 @@ public class HabitDueDaysTests
 
         Assert.Equal([max], HabitDueDays.Between(HabitSchedule.Daily, startDate: DateOnly.MinValue, from: max, to: max));
     }
+
+    // ---- A sub-habit: the habit's due days that fall on its weekdays ----
+
+    private static readonly WeekdaySet OnlyThursday = WeekdaySet.Of([DayOfWeek.Thursday]);
+
+    [Fact]
+    public void ForASubHabit_OnlyTheDueDaysOnItsWeekdaysAreDue()
+    {
+        // Mondays and Thursdays are due; the sub-habit is planned on Thursdays only.
+        var due = HabitDueDays.Between(MondayAndThursday, D(1, 1), OnlyThursday, from: D(10, 5), to: D(10, 15));
+
+        Assert.Equal([D(10, 8), D(10, 15)], due);
+    }
+
+    [Fact]
+    public void ForASubHabit_AWeekdayTheHabitIsNotDueOn_IsNeverDue()
+    {
+        var onlyTuesday = WeekdaySet.Of([DayOfWeek.Tuesday]);
+
+        Assert.Empty(HabitDueDays.Between(MondayAndThursday, D(1, 1), onlyTuesday, D(10, 1), D(10, 31)));
+        Assert.False(HabitDueDays.IsDue(MondayAndThursday, D(1, 1), onlyTuesday, D(10, 6)));
+    }
+
+    [Fact]
+    public void ForASubHabit_TheRhythmOfTheHabitCarriesIt()
+    {
+        // Every second week on Thursday, counted from the week of 5 October: 8 and 22 October are due, 15 October is not.
+        var everyOtherWeek = HabitSchedule.Weekly([DayOfWeek.Thursday], everyWeeks: 2, anchor: D(10, 5));
+
+        var due = HabitDueDays.Between(everyOtherWeek, D(1, 1), OnlyThursday, D(10, 1), D(10, 31));
+
+        Assert.Equal([D(10, 8), D(10, 22)], due);
+    }
+
+    [Fact]
+    public void ForASubHabit_ADayBeforeTheStartDate_IsNotDue()
+    {
+        Assert.False(HabitDueDays.IsDue(MondayAndThursday, D(10, 9), OnlyThursday, D(10, 8)));
+        Assert.True(HabitDueDays.IsDue(MondayAndThursday, D(10, 8), OnlyThursday, D(10, 8)));
+    }
+
+    [Fact]
+    public void IsDue_AgreesWithBetween_ForEveryDayOfAYear()
+    {
+        var schedule = HabitSchedule.MonthlyOnWeekday(WeekdayOccurrence.Second, DayOfWeek.Thursday);
+        var weekdays = WeekdaySet.Of([DayOfWeek.Thursday, DayOfWeek.Friday]);
+        var start = D(3, 1);
+
+        var between = HabitDueDays.Between(schedule, start, weekdays, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31));
+
+        for (var day = new DateOnly(2026, 1, 1); day.Year == 2026; day = day.AddDays(1))
+            Assert.Equal(between.Contains(day), HabitDueDays.IsDue(schedule, start, weekdays, day));
+    }
 }

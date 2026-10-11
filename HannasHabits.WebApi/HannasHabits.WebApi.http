@@ -205,6 +205,39 @@ Content-Type: application/json
 DELETE {{host}}/api/tags/{{tagId}}
 Authorization: Bearer {{accessToken}}
 
+### Add a sub-habit ("Legs" of "Sport") - 201 with { id, title, weekdays }. At most 10 per habit; the title is unique per habit
+### (ignoring case); weekdays are 0 = Sunday ... 6 = Saturday and must be days the habit itself is planned on (400 detail otherwise).
+# A sub-habit is due where the habit is due AND the weekday is one of its own - a later change of the habit's rhythm carries it along.
+POST {{host}}/api/habits/{{habitId}}/sub-habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Legs", "weekdays": [1, 5] }
+
+> {%
+    client.global.set("subHabitId", response.body.id);
+%}
+
+### Rename / move a sub-habit - 200 { id, title, weekdays }. Its ticks stay.
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Legs & glutes", "weekdays": [1] }
+
+### Tick a sub-habit on a day - 200 { date, habitCompleted, completedSubHabitIds }. Idempotent.
+# The habit's day follows: when this was the last of the day's due sub-habits, habitCompleted is true (and the habit has a record that day).
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Take the tick back - 200 with the day after the call. Idempotent. A day that was done because all its due parts were is not done any more.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Remove a sub-habit with all its ticks - 204. The habit's own days stay as they are.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}
+Authorization: Bearer {{accessToken}}
+
 ### Delete the habit (its records go with it) - 204
 DELETE {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}

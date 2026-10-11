@@ -4,6 +4,7 @@ using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Application.SubHabits;
 using HannasHabits.Domain.Entities;
 
 namespace HannasHabits.Application.Tests.Fakes;
@@ -21,6 +22,9 @@ internal sealed class FakeHabitRepository : IHabitRepository
         => Task.FromResult(Habits.FirstOrDefault(h => h.Id == habitId && h.UserId == userId));
 
     public Task<Habit?> GetByIdWithRecordsAsync(Guid userId, Guid habitId, CancellationToken cancellationToken)
+        => GetByIdAsync(userId, habitId, cancellationToken);
+
+    public Task<Habit?> GetByIdWithSubHabitsAsync(Guid userId, Guid habitId, CancellationToken cancellationToken)
         => GetByIdAsync(userId, habitId, cancellationToken);
 
     public void Add(Habit habit) => Habits.Add(habit);
@@ -64,7 +68,11 @@ internal sealed class FakeHabitQueries : IHabitQueries
         return Task.FromResult(_repository.Habits
             .Where(h => h.UserId == userId)
             .Select(h => new HabitWithCompletedDates(
-                h.Id, h.Title.Value, h.Schedule, h.StartDate, h.Records.Select(r => r.Date).ToList()))
+                h.Id, h.Title.Value, h.Schedule, h.StartDate, h.Records.Select(r => r.Date).ToList(),
+                h.SubHabits
+                    .Select(s => new SubHabitWithCompletedDates(
+                        s.Id, s.Title.Value, s.Weekdays, s.Records.Select(r => r.Date).ToList()))
+                    .ToList()))
             .ToList());
     }
 
@@ -77,7 +85,22 @@ internal sealed class FakeHabitQueries : IHabitQueries
             ? null
             : new HabitDetailsDto(
                 habit.Id, habit.Title.Value, habit.Description, RecurrenceDto.From(habit.Schedule), habit.StartDate,
-                habit.CreatedAt));
+                habit.CreatedAt, habit.SubHabits.Select(SubHabitDto.From).ToList()));
+    }
+
+    /// <summary>Replaces the answer of <see cref="GetDayAsync"/> (e.g. to play the winner of a race).</summary>
+    public Func<HabitDayDto?>? DayOverride { get; set; }
+
+    public Task<HabitDayDto?> GetDayAsync(Guid userId, Guid habitId, DateOnly date, CancellationToken cancellationToken)
+    {
+        AskedForUsers.Add(userId);
+
+        if (DayOverride is not null)
+            return Task.FromResult(DayOverride());
+
+        var habit = _repository.Habits.FirstOrDefault(h => h.Id == habitId && h.UserId == userId);
+
+        return Task.FromResult(habit is null ? null : HabitDayDto.Of(habit, date));
     }
 
     public Task<List<HabitRecordDto>?> GetRecordsAsync(

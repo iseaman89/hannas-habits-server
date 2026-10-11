@@ -24,10 +24,26 @@ namespace HannasHabits.Application.Habits.Queries.GetHabitsOverview;
 /// Scheduled days in a row, as of the requested day - independent of the range, it can span months. For a quota rule
 /// it is the number of weeks (<c>timesPerWeek</c>) or months (<c>timesPerMonth</c>) in a row that reached their count.
 /// </param>
+/// <param name="SubHabits">
+/// The parts of the habit in the order they were added, each with its due and its done days of the range. A habit's
+/// day is done when all of that day's due sub-habits are; the streak counts the habit's own days only.
+/// </param>
 public record HabitOverviewDto(
     Guid Id, string Title, RecurrenceDto Recurrence, DateOnly StartDate,
     IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates,
-    IReadOnlyList<TaggedDayDto> TaggedDays, IReadOnlyList<QuotaPeriodDto> QuotaPeriods, int CurrentStreak);
+    IReadOnlyList<TaggedDayDto> TaggedDays, IReadOnlyList<QuotaPeriodDto> QuotaPeriods, int CurrentStreak,
+    IReadOnlyList<SubHabitOverviewDto> SubHabits);
+
+/// <summary>A part of a habit within the requested range.</summary>
+/// <param name="Weekdays">The days of the week it is planned on (0 = Sunday ... 6 = Saturday), never empty.</param>
+/// <param name="ScheduledDates">
+/// The days of the range on which it is due: the habit is due (from its start date on) and the weekday is one of
+/// <paramref name="Weekdays"/>, oldest first.
+/// </param>
+/// <param name="CompletedDates">The days of the range it was done on - also one it was not due on - oldest first.</param>
+public record SubHabitOverviewDto(
+    Guid Id, string Title, IReadOnlyList<DayOfWeek> Weekdays,
+    IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates);
 
 /// <summary>One calendar week (Monday to Sunday) or month of a quota habit and how often it was done in it.</summary>
 /// <param name="From">First day of the period (yyyy-MM-dd), also if that is before the range or the start date.</param>

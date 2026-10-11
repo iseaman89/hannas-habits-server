@@ -257,6 +257,57 @@ namespace HannasHabits.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("Weekdays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HabitId");
+
+                    b.ToTable("SubHabits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubHabits_Weekdays", "\"Weekdays\" BETWEEN 1 AND 127");
+                        });
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabitRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("SubHabitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubHabitId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SubHabitRecords", (string)null);
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -595,6 +646,24 @@ namespace HannasHabits.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabit", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.Habit", null)
+                        .WithMany("SubHabits")
+                        .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabitRecord", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.SubHabit", null)
+                        .WithMany("Records")
+                        .HasForeignKey("SubHabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.Tag", b =>
                 {
                     b.HasOne("HannasHabits.Infrastructure.Identity.ApplicationUser", null)
@@ -667,11 +736,18 @@ namespace HannasHabits.Infrastructure.Migrations
             modelBuilder.Entity("HannasHabits.Domain.Entities.Habit", b =>
                 {
                     b.Navigation("Records");
+
+                    b.Navigation("SubHabits");
                 });
 
             modelBuilder.Entity("HannasHabits.Domain.Entities.HabitDayEntry", b =>
                 {
                     b.Navigation("Tags");
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabit", b =>
+                {
+                    b.Navigation("Records");
                 });
 #pragma warning restore 612, 618
         }

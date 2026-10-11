@@ -373,7 +373,103 @@ public class SchemaTests : IAsyncLifetime
         await Sql.InsertDayTagAsync(_db, entry, await Sql.InsertTagAsync(_db, _user, "Urlaub"));
     }
 
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(127, true)]
+    [InlineData(34, true)]
+    [InlineData(0, false)]
+    [InlineData(128, false)]
+    [InlineData(-1, false)]
+    public async Task SubHabits_AreOnAtLeastOneAndAtMostAllSevenWeekdays(int weekdays, bool accepted)
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+
+        if (accepted)
+            await Sql.InsertSubHabitAsync(_db, habit, weekdays: weekdays);
+        else
+            Assert.Equal(("23514", "CK_SubHabits_Weekdays"),
+                Describe(await Sql.RejectedAsync(() => Sql.InsertSubHabitAsync(_db, habit, weekdays: weekdays))));
+    }
+
+    [Fact]
+    public async Task ASubHabit_NeedsItsHabit()
+    {
+        Assert.Equal(SqlState.ForeignKeyViolation,
+            (await Sql.RejectedAsync(() => Sql.InsertSubHabitAsync(_db, Guid.NewGuid()))).SqlState);
+    }
+
+    [Fact]
+    public async Task ASubHabit_IsDoneOnADayOnlyOnce_ButOnManyDays_AndTwoPartsMayShareADay()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        await Sql.InsertSubHabitRecordAsync(_db, legs, "2026-10-05");
+
+        Assert.Equal(SqlState.UniqueViolation,
+            (await Sql.RejectedAsync(() => Sql.InsertSubHabitRecordAsync(_db, legs, "2026-10-05"))).SqlState);
+
+        await Sql.InsertSubHabitRecordAsync(_db, legs, "2026-10-12");
+        await Sql.InsertSubHabitRecordAsync(_db, core, "2026-10-05");
+    }
+
     // ---- cascades ----
+
+    [Fact]
+    public async Task DeletingAHabit_RemovesItsSubHabitsAndTheirTicks_ButNotThoseOfAnotherHabit()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var other = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var arms = await Sql.InsertSubHabitAsync(_db, other, "Arms");
+        await Sql.InsertSubHabitRecordAsync(_db, legs, "2026-10-05");
+        await Sql.InsertSubHabitRecordAsync(_db, arms, "2026-10-05");
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Habits" WHERE "Id" = {habit}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "SubHabits", "HabitId", habit));
+        Assert.Equal(0, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabits", "HabitId", other));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", arms));
+    }
+
+    [Fact]
+    public async Task DeletingASubHabit_RemovesItsTicks_ButNotTheHabitsOwnDays()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        await Sql.InsertRecordAsync(_db, habit, "2026-10-05");
+        await Sql.InsertSubHabitRecordAsync(_db, legs, "2026-10-05");
+        await Sql.InsertSubHabitRecordAsync(_db, core, "2026-10-05");
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "SubHabits" WHERE "Id" = {legs}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", core));
+        Assert.Equal(1, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit));
+    }
+
+    [Fact]
+    public async Task DeletingAUser_RemovesTheirSubHabitsAndTicks_AndNothingOfAnybodyElse()
+    {
+        var other = await Sql.InsertUserAsync(_db);
+        foreach (var owner in new[] { _user, other })
+        {
+            var habit = await Sql.InsertHabitAsync(_db, owner);
+            var part = await Sql.InsertSubHabitAsync(_db, habit);
+            await Sql.InsertSubHabitRecordAsync(_db, part, "2026-10-05");
+        }
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "AspNetUsers" WHERE "Id" = {_user}""");
+
+        const string PartsOf = "SELECT COUNT(*) FROM \"SubHabits\" s JOIN \"Habits\" h ON h.\"Id\" = s.\"HabitId\" WHERE h.\"UserId\" = @p0";
+        const string TicksOf = "SELECT COUNT(*) FROM \"SubHabitRecords\" r JOIN \"SubHabits\" s ON s.\"Id\" = r.\"SubHabitId\" JOIN \"Habits\" h ON h.\"Id\" = s.\"HabitId\" WHERE h.\"UserId\" = @p0";
+        Assert.Equal(0, await Sql.ScalarAsync(_db, PartsOf, _user));
+        Assert.Equal(0, await Sql.ScalarAsync(_db, TicksOf, _user));
+        Assert.Equal(1, await Sql.ScalarAsync(_db, PartsOf, other));
+        Assert.Equal(1, await Sql.ScalarAsync(_db, TicksOf, other));
+    }
 
     [Fact]
     public async Task DeletingAUser_RemovesEverythingTheyOwn_AndNothingOfAnybodyElse()
@@ -515,6 +611,9 @@ public class SchemaTests : IAsyncLifetime
         Assert.Equal(("character varying", "NO"), TypeOf("Tags.NameKey"));
         Assert.Equal(("date", "NO"), TypeOf("HabitDayEntries.Date"));
         Assert.Equal(("uuid", "NO"), TypeOf("HabitDayTags.TagId"));
+        Assert.Equal(("character varying", "NO"), TypeOf("SubHabits.Title"));
+        Assert.Equal(("integer", "NO"), TypeOf("SubHabits.Weekdays"));
+        Assert.Equal(("date", "NO"), TypeOf("SubHabitRecords.Date"));
 
         // No default for the start date: one that the check constraint rejects (0001-01-01) would be a trap for any insert
         // that forgets the column.

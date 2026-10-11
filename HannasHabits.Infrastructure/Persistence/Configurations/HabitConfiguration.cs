@@ -64,5 +64,10 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
             .WithOne()
             .HasForeignKey(h => h.HabitId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(h => h.SubHabits)
+            .WithOne()
+            .HasForeignKey(s => s.HabitId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

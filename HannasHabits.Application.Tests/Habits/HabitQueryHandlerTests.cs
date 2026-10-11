@@ -54,6 +54,30 @@ public class GetHabitByIdQueryHandlerTests
     }
 
     [Fact]
+    public async Task CarriesTheSubHabits_InTheOrderTheyWereAdded()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Sport", schedule: HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Friday]));
+        habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        habit.AddSubHabit(HabitTitle.Create("Arms"), WeekdaySet.Of([DayOfWeek.Friday]));
+        _repository.Habits.Add(habit);
+
+        var details = await Handle(habit.Id);
+
+        Assert.Equal(["Legs", "Arms"], details.SubHabits.Select(s => s.Title));
+        Assert.Equal([DayOfWeek.Monday], details.SubHabits[0].Weekdays);
+        Assert.Equal([DayOfWeek.Friday], details.SubHabits[1].Weekdays);
+    }
+
+    [Fact]
+    public async Task AHabitWithoutSubHabits_HasAnEmptyList()
+    {
+        var habit = Make.NewHabit(_user.UserId);
+        _repository.Habits.Add(habit);
+
+        Assert.Empty((await Handle(habit.Id)).SubHabits);
+    }
+
+    [Fact]
     public async Task AnUnknownHabit_IsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => Handle(Guid.NewGuid()));
@@ -346,6 +370,74 @@ public class GetHabitsOverviewQueryHandlerTests
 
         Assert.Equal([_user.UserId], queries.AskedForUsers);
         Assert.Equal([_user.UserId], tagQueries.AskedForUsers);
+    }
+
+    // ---- sub-habits ----
+
+    [Fact]
+    public async Task SubHabits_CarryTheirDueAndDoneDaysOfTheRange()
+    {
+        // 5 October 2026 is a Monday. Sport is due on Mondays and Thursdays; Legs is planned on Mondays only.
+        var habit = Make.NewHabit(_user.UserId, "Sport", new DateOnly(2026, 9, 1),
+            HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Thursday]));
+        var legs = habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        var core = habit.AddSubHabit(HabitTitle.Create("Core"), WeekdaySet.Of([DayOfWeek.Monday, DayOfWeek.Thursday]));
+        habit.MarkCompleted(new DateOnly(2026, 9, 28)); // before the range: ticks Legs and Core of that Monday
+        habit.MarkSubHabitCompleted(legs.Id, new DateOnly(2026, 10, 5));
+        habit.MarkSubHabitCompleted(core.Id, new DateOnly(2026, 10, 5));
+        habit.MarkSubHabitCompleted(core.Id, new DateOnly(2026, 10, 8));
+        _repository.Habits.Add(habit);
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 14)));
+
+        Assert.Collection(item.SubHabits,
+            part =>
+            {
+                Assert.Equal(legs.Id, part.Id);
+                Assert.Equal("Legs", part.Title);
+                Assert.Equal([DayOfWeek.Monday], part.Weekdays);
+                Assert.Equal(Days(10, 5, 12), part.ScheduledDates);
+                Assert.Equal(Days(10, 5), part.CompletedDates); // 28 September is outside the range
+            },
+            part =>
+            {
+                Assert.Equal(core.Id, part.Id);
+                Assert.Equal([DayOfWeek.Monday, DayOfWeek.Thursday], part.Weekdays);
+                Assert.Equal(Days(10, 1, 5, 8, 12), part.ScheduledDates);
+                Assert.Equal(Days(10, 5, 8), part.CompletedDates);
+            });
+    }
+
+    [Fact]
+    public async Task SubHabits_DoNotTouchTheHabitsOwnDaysOrItsStreak()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Sport", new DateOnly(2026, 10, 1),
+            HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Thursday]));
+        var legs = habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Thursday]));
+        habit.AddSubHabit(HabitTitle.Create("Core"), WeekdaySet.Of([DayOfWeek.Thursday]));
+        habit.MarkSubHabitCompleted(legs.Id, Today); // Core is still open: Thursday is not done
+
+        var item = Assert.Single(await HandleWith(habit));
+
+        Assert.Empty(item.CompletedDates);
+        Assert.Equal(0, item.CurrentStreak);
+        Assert.Equal(Days(10, 8), item.SubHabits[0].CompletedDates);
+    }
+
+    private Task<List<HabitOverviewDto>> HandleWith(Habit habit)
+    {
+        _repository.Habits.Add(habit);
+        return Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31));
+    }
+
+    [Fact]
+    public async Task AHabitWithoutSubHabits_HasNone()
+    {
+        _repository.Habits.Add(Make.NewHabit(_user.UserId));
+
+        var item = Assert.Single(await Handle(Today, Today));
+
+        Assert.Empty(item.SubHabits);
     }
 
     // ---- tags ----

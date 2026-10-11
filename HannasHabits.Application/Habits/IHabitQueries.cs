@@ -2,6 +2,7 @@ using HannasHabits.Application.HabitRecords.Commands.MarkCompleted;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.SubHabits;
 
 namespace HannasHabits.Application.Habits;
 
@@ -21,6 +22,12 @@ public interface IHabitQueries
 
     /// <summary><c>null</c> if the habit does not exist or belongs to another user.</summary>
     Task<HabitDetailsDto?> GetByIdAsync(Guid userId, Guid habitId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One day of the habit as it is stored: whether the habit and which of its sub-habits are done. <c>null</c> if the
+    /// habit does not exist or belongs to another user.
+    /// </summary>
+    Task<HabitDayDto?> GetDayAsync(Guid userId, Guid habitId, DateOnly date, CancellationToken cancellationToken);
 
     /// <summary>
     /// Records of the habit ordered by date, <paramref name="from"/> and <paramref name="to"/> inclusive and optional.

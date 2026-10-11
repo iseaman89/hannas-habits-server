@@ -7,6 +7,8 @@ using HannasHabits.Application.HabitDays.Commands.DetachTag;
 using HannasHabits.Application.HabitRecords.Commands.MarkCompleted;
 using HannasHabits.Application.HabitRecords.Commands.UnmarkCompleted;
 using HannasHabits.Application.Resolutions.Commands.AddResolution;
+using HannasHabits.Application.SubHabits;
+using HannasHabits.Application.SubHabits.Commands.MarkSubHabitCompleted;
 using HannasHabits.Application.Tags;
 using HannasHabits.Application.Tags.Commands.CreateTag;
 using HannasHabits.Domain.Enums;
@@ -120,6 +122,63 @@ public class RaceTests : IAsyncLifetime
             Assert.Single(outcomes, outcome => outcome is ConflictException);  // 0 rows deleted: "changed by another request" (409)
             Assert.Equal(0, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit));
         }
+    }
+
+    // ---- sub-habits: the part's tick and the habit's day ----
+
+    private Task<(HabitDayDto? Result, Exception? Failure)> TickPart(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid part)
+        => Race(barrier, units, (db, uow) => new MarkSubHabitCompletedCommandHandler(
+                new HabitRepository(db), new HabitQueries(db), uow, new FakeCurrentUser(_user))
+            .Handle(new MarkSubHabitCompletedCommand(habit, part, Day), default));
+
+    [Fact]
+    public async Task TickingTheSamePartTwiceAtOnce_EndsInOneTick_AndBothCallersGetTheCompletedDay()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => TickPart(barrier, units, habit, legs)),
+                Task.Run(() => TickPart(barrier, units, habit, legs)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.All(results, result => Assert.True(result.Result!.HabitCompleted));        // both see the day done
+            Assert.All(results, result => Assert.Equal([legs], result.Result!.CompletedSubHabitIds));
+            Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs)); // one tick...
+            Assert.Equal(1, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit));      // ...and one day
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);          // the unique index really fired
+        }
+    }
+
+    // KNOWN LIMIT, pinned here so that it is not forgotten: the habit's day follows its parts when a part is ticked,
+    // by looking at the parts this request loaded. Two requests that tick the last two open parts at the same moment
+    // each see the other one still open, neither completes the day, and nothing in the database objects (no unique
+    // index is touched). Both ticks are kept; the habit's day stays open until a tick or the habit's own tick touches
+    // the day again. One person on one device cannot do this (the UI ticks one after the other); it takes two devices
+    // within the same few milliseconds. Closing it would need a row version on the habit or a re-check after the save.
+    [Fact]
+    public async Task TickingTheTwoLastOpenPartsAtOnce_KeepsBothTicks_ButCannotCompleteTheDay()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        var barrier = new Barrier(2);
+        var units = new List<RaceUnitOfWork>();
+
+        var results = await Task.WhenAll(
+            Task.Run(() => TickPart(barrier, units, habit, legs)),
+            Task.Run(() => TickPart(barrier, units, habit, core)));
+
+        Assert.All(results, result => Assert.Null(result.Failure));
+        Assert.All(units, uow => Assert.Null(uow.SaveFailure));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", core));
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit)); // the limit
     }
 
     // ---- the diary: last write wins, as a whole ----

@@ -56,8 +56,18 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
             HabitQuota.Between(habit.Schedule, habit.StartDate, completed, from, to, asOf)
                 .Select(progress => new QuotaPeriodDto(progress.Period.From, progress.Period.To, progress.Done))
                 .ToList(),
-            HabitStreak.Current(habit.Schedule, habit.StartDate, completed, asOf));
+            HabitStreak.Current(habit.Schedule, habit.StartDate, completed, asOf),
+            habit.SubHabits.Select(subHabit => SubHabitOf(habit, subHabit, from, to)).ToList());
     }
+
+    private static SubHabitOverviewDto SubHabitOf(
+        HabitWithCompletedDates habit, SubHabitWithCompletedDates subHabit, DateOnly from, DateOnly to)
+        => new(
+            subHabit.Id,
+            subHabit.Title,
+            subHabit.Weekdays.Days,
+            HabitDueDays.Between(habit.Schedule, habit.StartDate, subHabit.Weekdays, from, to),
+            subHabit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList());
 
     // The rows come ordered by date and tag name; grouping keeps that order.
     private static List<TaggedDayDto> TaggedDaysOf(IEnumerable<TaggedDayRow> rows)

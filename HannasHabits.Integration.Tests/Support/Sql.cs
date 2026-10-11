@@ -62,6 +62,32 @@ public static class Sql
         return id;
     }
 
+    /// <summary>A sub-habit through plain SQL; <paramref name="weekdays"/> is the weekday bit set (Sunday = bit 0).</summary>
+    public static async Task<Guid> InsertSubHabitAsync(
+        ApplicationDbContext db, Guid habitId, string title = "Part", int weekdays = 127, DateTime? createdAt = null)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabits" ("Id", "CreatedAt", "HabitId", "Title", "Weekdays")
+            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {habitId}, {title}, {weekdays})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertSubHabitRecordAsync(ApplicationDbContext db, Guid subHabitId, string date)
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabitRecords" ("Id", "CreatedAt", "SubHabitId", "Date") VALUES ({id}, {DateTime.UtcNow}, {subHabitId}, {day})
+            """);
+
+        return id;
+    }
+
     public static async Task<Guid> InsertDiaryAsync(
         ApplicationDbContext db, Guid userId, string date, int? mood = 3, int? body = null, int? mind = null)
     {

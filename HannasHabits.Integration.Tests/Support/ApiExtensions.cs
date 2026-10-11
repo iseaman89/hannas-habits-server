@@ -48,6 +48,32 @@ public static class ApiExtensions
         return await response.ReadJsonAsync();
     }
 
+    /// <summary>Adds a sub-habit to a habit (the call must answer 201) and returns its id.</summary>
+    public static async Task<Guid> AddSubHabitAsync(
+        this TestUser user, Guid habitId, string title, params int[] weekdays)
+    {
+        var response = await user.Client.PostAsync($"/api/habits/{habitId}/sub-habits", new { title, weekdays });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Ticks sub-habits on a day (every call must answer 200) and returns the day after the last tick.</summary>
+    public static async Task<System.Text.Json.JsonElement> TickSubHabitAsync(
+        this TestUser user, Guid habitId, string date, params Guid[] subHabitIds)
+    {
+        System.Text.Json.JsonElement day = default;
+
+        foreach (var subHabitId in subHabitIds)
+        {
+            var response = await user.Client.PutAsync($"/api/habits/{habitId}/sub-habits/{subHabitId}/records/{date}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            day = await response.ReadJsonAsync();
+        }
+
+        return day;
+    }
+
     public static string[] Days(int year, int month, params int[] days)
         => days.Select(day => new DateOnly(year, month, day).ToString("yyyy-MM-dd")).ToArray();
 
