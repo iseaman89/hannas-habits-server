@@ -36,14 +36,50 @@ internal sealed class FakeHabitRepository : IHabitRepository
     }
 }
 
+/// <summary>
+/// Holds the notes of the parts in a list. Like the real repository it hands a note out only to the owner of the part's
+/// habit (looked up in the habits' list).
+/// </summary>
+internal sealed class FakeSubHabitNoteRepository : ISubHabitNoteRepository
+{
+    private readonly FakeHabitRepository _habits;
+
+    public FakeSubHabitNoteRepository(FakeHabitRepository habits)
+    {
+        _habits = habits;
+    }
+
+    public List<SubHabitNote> Notes { get; } = [];
+    public List<SubHabitNote> Removed { get; } = [];
+
+    /// <summary>Whether the part is one of the user's.</summary>
+    public bool IsOwnedBy(Guid userId, Guid subHabitId)
+        => _habits.Habits.Any(h => h.UserId == userId && h.SubHabitById(subHabitId) is not null);
+
+    public Task<SubHabitNote?> GetAsync(Guid userId, Guid subHabitId, DateOnly date, CancellationToken cancellationToken)
+        => Task.FromResult(IsOwnedBy(userId, subHabitId)
+            ? Notes.FirstOrDefault(n => n.SubHabitId == subHabitId && n.Date == date)
+            : null);
+
+    public void Add(SubHabitNote note) => Notes.Add(note);
+
+    public void Remove(SubHabitNote note)
+    {
+        Notes.Remove(note);
+        Removed.Add(note);
+    }
+}
+
 /// <summary>The read side over the same list of habits; remembers which user it was asked for.</summary>
 internal sealed class FakeHabitQueries : IHabitQueries
 {
     private readonly FakeHabitRepository _repository;
+    private readonly FakeSubHabitNoteRepository? _notes;
 
-    public FakeHabitQueries(FakeHabitRepository repository)
+    public FakeHabitQueries(FakeHabitRepository repository, FakeSubHabitNoteRepository? notes = null)
     {
         _repository = repository;
+        _notes = notes;
     }
 
     public List<Guid> AskedForUsers { get; } = [];
@@ -101,6 +137,18 @@ internal sealed class FakeHabitQueries : IHabitQueries
         var habit = _repository.Habits.FirstOrDefault(h => h.Id == habitId && h.UserId == userId);
 
         return Task.FromResult(habit is null ? null : HabitDayDto.Of(habit, date));
+    }
+
+    public Task<List<SubHabitNoteRow>> GetSubHabitNotesAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        AskedForUsers.Add(userId);
+
+        return Task.FromResult((_notes?.Notes ?? [])
+            .Where(n => n.Date >= from && n.Date <= to && _notes!.IsOwnedBy(userId, n.SubHabitId))
+            .OrderBy(n => n.Date)
+            .Select(n => new SubHabitNoteRow(n.SubHabitId, n.Date, n.Text))
+            .ToList());
     }
 
     public Task<List<HabitRecordDto>?> GetRecordsAsync(

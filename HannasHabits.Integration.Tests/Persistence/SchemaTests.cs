@@ -434,6 +434,101 @@ public class SchemaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ASubHabitNote_NeedsItsPart()
+    {
+        Assert.Equal("23503",
+            (await Sql.RejectedAsync(() => Sql.InsertSubHabitNoteAsync(_db, Guid.NewGuid(), "2026-10-05"))).SqlState);
+    }
+
+    [Fact]
+    public async Task ASubHabitHasOneNoteADay_ButOnManyDays_AndTwoPartsMayShareADay()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05");
+
+        Assert.Equal("23505",
+            (await Sql.RejectedAsync(() => Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05"))).SqlState);
+
+        await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-12");
+        await Sql.InsertSubHabitNoteAsync(_db, core, "2026-10-05");
+    }
+
+    [Theory]
+    [InlineData("1999-12-31", false)]
+    [InlineData("2000-01-01", true)]
+    [InlineData("2100-12-31", true)]
+    [InlineData("2101-01-01", false)]
+    public async Task ASubHabitNote_IsOnADayInThePlausibleRange(string date, bool accepted)
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+
+        if (accepted)
+            await Sql.InsertSubHabitNoteAsync(_db, legs, date);
+        else
+            Assert.Equal(("23514", "CK_SubHabitNotes_Date"),
+                Describe(await Sql.RejectedAsync(() => Sql.InsertSubHabitNoteAsync(_db, legs, date))));
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("x", true)]
+    public async Task ASubHabitNote_SaysSomething(string text, bool accepted)
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+
+        if (accepted)
+            await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05", text);
+        else
+            Assert.Equal(("23514", "CK_SubHabitNotes_Text"),
+                Describe(await Sql.RejectedAsync(() => Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05", text))));
+    }
+
+    [Fact]
+    public async Task ASubHabitNote_IsNotLongerThanTheDomainAllows()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+
+        await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05", new string('a', 500));
+
+        // The column is varchar(500): one more is refused (22001) before the check constraint is even looked at.
+        Assert.Equal("22001",
+            (await Sql.RejectedAsync(() => Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-06", new string('a', 501)))).SqlState);
+    }
+
+    [Fact]
+    public async Task DeletingASubHabit_RemovesItsNotes_ButNotThoseOfAnotherPart()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05");
+        await Sql.InsertSubHabitNoteAsync(_db, core, "2026-10-05");
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "SubHabits" WHERE "Id" = {legs}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "SubHabitNotes", "SubHabitId", legs));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitNotes", "SubHabitId", core));
+    }
+
+    [Fact]
+    public async Task DeletingAHabit_RemovesTheNotesOfItsParts()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        await Sql.InsertSubHabitNoteAsync(_db, legs, "2026-10-05");
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "Habits" WHERE "Id" = {habit}""");
+
+        Assert.Equal(0, await Sql.CountAsync(_db, "SubHabitNotes", "SubHabitId", legs));
+    }
+
+    [Fact]
     public async Task DeletingASubHabit_RemovesItsTicks_ButNotTheHabitsOwnDays()
     {
         var habit = await Sql.InsertHabitAsync(_db, _user);

@@ -1,7 +1,9 @@
 using FluentValidation.TestHelper;
 using HannasHabits.Application.SubHabits.Commands.AddSubHabit;
+using HannasHabits.Application.SubHabits.Commands.ClearSubHabitNote;
 using HannasHabits.Application.SubHabits.Commands.MarkSubHabitCompleted;
 using HannasHabits.Application.SubHabits.Commands.RemoveSubHabit;
+using HannasHabits.Application.SubHabits.Commands.SetSubHabitNote;
 using HannasHabits.Application.SubHabits.Commands.UnmarkSubHabitCompleted;
 using HannasHabits.Application.SubHabits.Commands.UpdateSubHabit;
 using HannasHabits.Domain.Entities;
@@ -161,5 +163,83 @@ public class MarkSubHabitCompletedCommandValidatorTests
         foreach (var date in new[] { Habit.MinStartDate, Habit.MaxStartDate })
             _validator.TestValidate(new MarkSubHabitCompletedCommand(Guid.NewGuid(), Guid.NewGuid(), date))
                 .ShouldNotHaveValidationErrorFor(x => x.Date);
+    }
+}
+
+public class SetSubHabitNoteCommandValidatorTests
+{
+    private readonly SetSubHabitNoteCommandValidator _validator = new();
+
+    private static SetSubHabitNoteCommand Valid(
+        string? text = "3 x 10", DateOnly? date = null, Guid? habitId = null, Guid? subHabitId = null)
+        => new(habitId ?? Guid.NewGuid(), subHabitId ?? Guid.NewGuid(), date ?? new DateOnly(2026, 10, 5), text);
+
+    [Fact]
+    public void AValidCommand_Passes()
+    {
+        _validator.TestValidate(Valid()).ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void EmptyIds_AreRejected()
+    {
+        _validator.TestValidate(Valid(habitId: Guid.Empty)).ShouldHaveValidationErrorFor(x => x.HabitId);
+        _validator.TestValidate(Valid(subHabitId: Guid.Empty)).ShouldHaveValidationErrorFor(x => x.SubHabitId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AMissingOrBlankText_IsRejected(string? text)
+    {
+        _validator.TestValidate(Valid(text)).ShouldHaveValidationErrorFor(x => x.Text);
+    }
+
+    [Fact]
+    public void TheText_MayBeAsLongAsTheLimit_NotLonger_CountedWithoutItsPadding()
+    {
+        var limit = SubHabitNote.TextMaxLength;
+
+        _validator.TestValidate(Valid(new string('a', limit))).ShouldNotHaveValidationErrorFor(x => x.Text);
+        _validator.TestValidate(Valid("  " + new string('a', limit) + "  ")).ShouldNotHaveValidationErrorFor(x => x.Text);
+        _validator.TestValidate(Valid(new string('a', limit + 1))).ShouldHaveValidationErrorFor(x => x.Text);
+    }
+
+    [Fact]
+    public void TheDay_MustBeInThePlausibleRange()
+    {
+        _validator.TestValidate(Valid(date: SubHabitNote.MinDate)).ShouldNotHaveValidationErrorFor(x => x.Date);
+        _validator.TestValidate(Valid(date: SubHabitNote.MaxDate)).ShouldNotHaveValidationErrorFor(x => x.Date);
+        _validator.TestValidate(Valid(date: SubHabitNote.MinDate.AddDays(-1))).ShouldHaveValidationErrorFor(x => x.Date);
+        _validator.TestValidate(Valid(date: SubHabitNote.MaxDate.AddDays(1))).ShouldHaveValidationErrorFor(x => x.Date);
+    }
+}
+
+public class ClearSubHabitNoteCommandValidatorTests
+{
+    private readonly ClearSubHabitNoteCommandValidator _validator = new();
+
+    private static ClearSubHabitNoteCommand Valid(DateOnly? date = null, Guid? habitId = null, Guid? subHabitId = null)
+        => new(habitId ?? Guid.NewGuid(), subHabitId ?? Guid.NewGuid(), date ?? new DateOnly(2026, 10, 5));
+
+    [Fact]
+    public void AValidCommand_Passes()
+    {
+        _validator.TestValidate(Valid()).ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void EmptyIds_AreRejected()
+    {
+        _validator.TestValidate(Valid(habitId: Guid.Empty)).ShouldHaveValidationErrorFor(x => x.HabitId);
+        _validator.TestValidate(Valid(subHabitId: Guid.Empty)).ShouldHaveValidationErrorFor(x => x.SubHabitId);
+    }
+
+    [Fact]
+    public void TheDay_MustBeInThePlausibleRange()
+    {
+        _validator.TestValidate(Valid(date: SubHabitNote.MinDate.AddDays(-1))).ShouldHaveValidationErrorFor(x => x.Date);
+        _validator.TestValidate(Valid(date: SubHabitNote.MaxDate.AddDays(1))).ShouldHaveValidationErrorFor(x => x.Date);
     }
 }

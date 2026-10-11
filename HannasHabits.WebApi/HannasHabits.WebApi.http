@@ -241,7 +241,21 @@ Authorization: Bearer {{accessToken}}
 DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/records/{{date}}
 Authorization: Bearer {{accessToken}}
 
-### Remove a sub-habit with all its ticks - 204. The habit's own days stay as they are.
+### Write the note of a sub-habit on a day - 200 { date, text }. One note per part and day; a second write replaces the text.
+# Independent of the tick (a missed day can carry one) and of the plan (any day within 2000-01-01..2100-12-31, like a tick).
+# Free text, trimmed at the ends, at most 500 characters; blank or missing is a 400 on `text` (take a note away with DELETE).
+# The overview carries it on its part: subHabits[].notes = [{ date, text }] (the range, oldest first).
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/notes/{{date}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "text": "3 x 10, left knee felt odd" }
+
+### Take the note away - 204. Idempotent: a day without a note is no error.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/notes/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Remove a sub-habit with all its ticks and notes - 204. The habit's own days stay as they are.
 DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}
 Authorization: Bearer {{accessToken}}
 

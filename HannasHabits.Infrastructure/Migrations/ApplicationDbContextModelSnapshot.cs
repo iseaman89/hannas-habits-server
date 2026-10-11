@@ -286,6 +286,38 @@ namespace HannasHabits.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabitNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("SubHabitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubHabitId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SubHabitNotes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubHabitNotes_Date", "\"Date\" BETWEEN DATE '2000-01-01' AND DATE '2100-12-31'");
+
+                            t.HasCheckConstraint("CK_SubHabitNotes_Text", "char_length(btrim(\"Text\")) BETWEEN 1 AND 500");
+                        });
+                });
+
             modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabitRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -651,6 +683,15 @@ namespace HannasHabits.Infrastructure.Migrations
                     b.HasOne("HannasHabits.Domain.Entities.Habit", null)
                         .WithMany("SubHabits")
                         .HasForeignKey("HabitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HannasHabits.Domain.Entities.SubHabitNote", b =>
+                {
+                    b.HasOne("HannasHabits.Domain.Entities.SubHabit", null)
+                        .WithMany()
+                        .HasForeignKey("SubHabitId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

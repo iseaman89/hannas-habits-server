@@ -9,6 +9,7 @@ using HannasHabits.Application.HabitRecords.Commands.UnmarkCompleted;
 using HannasHabits.Application.Resolutions.Commands.AddResolution;
 using HannasHabits.Application.SubHabits;
 using HannasHabits.Application.SubHabits.Commands.MarkSubHabitCompleted;
+using HannasHabits.Application.SubHabits.Commands.SetSubHabitNote;
 using HannasHabits.Application.Tags;
 using HannasHabits.Application.Tags.Commands.CreateTag;
 using HannasHabits.Domain.Enums;
@@ -179,6 +180,40 @@ public class RaceTests : IAsyncLifetime
         Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs));
         Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", core));
         Assert.Equal(0, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit)); // the limit
+    }
+
+    // ---- sub-habits: the note of a part on a day ----
+
+    private Task<(SubHabitNoteDto? Result, Exception? Failure)> WriteNote(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid part, string text)
+        => Race(barrier, units, (db, uow) => new SetSubHabitNoteCommandHandler(
+                new HabitRepository(db), new SubHabitNoteRepository(db), uow, new FakeCurrentUser(_user))
+            .Handle(new SetSubHabitNoteCommand(habit, part, Day, text), default));
+
+    [Fact]
+    public async Task WritingTheFirstNoteOfADayTwiceAtOnce_EndsInOneNote_AndNeitherCallerFails()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => WriteNote(barrier, units, habit, legs, "from the phone")),
+                Task.Run(() => WriteNote(barrier, units, habit, legs, "from the laptop")));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.Equal(["from the laptop", "from the phone"], results.Select(r => r.Result!.Text).Order());
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException); // the unique index really fired
+
+            // One note, whole, and it is one of the two texts: the loser's retry went onto the winner's row.
+            Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitNotes", "SubHabitId", legs));
+            Assert.Equal(1, await Sql.ScalarAsync(_db,
+                """SELECT COUNT(*) FROM "SubHabitNotes" WHERE "SubHabitId" = @p0 AND "Text" IN ('from the phone', 'from the laptop')""",
+                legs));
+        }
     }
 
     // ---- the diary: last write wins, as a whole ----

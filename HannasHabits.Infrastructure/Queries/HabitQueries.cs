@@ -77,6 +77,18 @@ public class HabitQueries : IHabitQueries
         return habit is null ? null : new HabitDayDto(date, habit.Completed, habit.SubHabitIds);
     }
 
+    // One query for the whole range and all habits (not one per habit); the user filter goes through the part's habit.
+    public Task<List<SubHabitNoteRow>> GetSubHabitNotesAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        => _context.SubHabitNotes
+            .AsNoTracking()
+            .Where(n => n.Date >= from && n.Date <= to)
+            .Where(n => _context.SubHabits.Any(s => s.Id == n.SubHabitId
+                                                    && _context.Habits.Any(h => h.Id == s.HabitId && h.UserId == userId)))
+            .OrderBy(n => n.Date).ThenBy(n => n.CreatedAt).ThenBy(n => n.Id)
+            .Select(n => new SubHabitNoteRow(n.SubHabitId, n.Date, n.Text))
+            .ToListAsync(cancellationToken);
+
     public async Task<List<HabitRecordDto>?> GetRecordsAsync(
         Guid userId, Guid habitId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {

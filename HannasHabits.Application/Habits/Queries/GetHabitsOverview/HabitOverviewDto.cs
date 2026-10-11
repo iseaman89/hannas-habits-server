@@ -1,4 +1,5 @@
 using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Application.SubHabits;
 using HannasHabits.Application.Tags;
 
 namespace HannasHabits.Application.Habits.Queries.GetHabitsOverview;
@@ -41,9 +42,14 @@ public record HabitOverviewDto(
 /// <paramref name="Weekdays"/>, oldest first.
 /// </param>
 /// <param name="CompletedDates">The days of the range it was done on - also one it was not due on - oldest first.</param>
+/// <param name="Notes">
+/// The notes written on the part's days of the range (done or not, due or not), oldest first - one per day at most. A
+/// day of the range that is not in the list has no note.
+/// </param>
 public record SubHabitOverviewDto(
     Guid Id, string Title, IReadOnlyList<DayOfWeek> Weekdays,
-    IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates);
+    IReadOnlyList<DateOnly> ScheduledDates, IReadOnlyList<DateOnly> CompletedDates,
+    IReadOnlyList<SubHabitNoteDto> Notes);
 
 /// <summary>One calendar week (Monday to Sunday) or month of a quota habit and how often it was done in it.</summary>
 /// <param name="From">First day of the period (yyyy-MM-dd), also if that is before the range or the start date.</param>

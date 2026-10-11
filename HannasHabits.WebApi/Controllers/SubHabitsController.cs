@@ -1,6 +1,8 @@
 using HannasHabits.Application.SubHabits;
+using HannasHabits.Application.SubHabits.Commands.ClearSubHabitNote;
 using HannasHabits.Application.SubHabits.Commands.MarkSubHabitCompleted;
 using HannasHabits.Application.SubHabits.Commands.RemoveSubHabit;
+using HannasHabits.Application.SubHabits.Commands.SetSubHabitNote;
 using HannasHabits.Application.SubHabits.Commands.UnmarkSubHabitCompleted;
 using HannasHabits.WebApi.Models;
 using MediatR;
@@ -91,5 +93,31 @@ public class SubHabitsController : ControllerBase
     {
         var day = await _mediator.Send(new UnmarkSubHabitCompletedCommand(habitId, subHabitId, date), cancellationToken);
         return Ok(day);
+    }
+
+    /// <summary>
+    /// Writes the part's note on a day: creates it or replaces the text. One note per part and day, independent of the
+    /// tick - a day that was missed can carry one. Answers with the note.
+    /// </summary>
+    [HttpPut("{subHabitId}/notes/{date}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<SubHabitNoteDto>> SetNote(Guid habitId, Guid subHabitId, DateOnly date,
+        SubHabitNoteRequest request, CancellationToken cancellationToken)
+    {
+        var note = await _mediator.Send(request.ToCommand(habitId, subHabitId, date), cancellationToken);
+        return Ok(note);
+    }
+
+    /// <summary>Takes the part's note on a day away. Idempotent: a day without a note is no error.</summary>
+    [HttpDelete("{subHabitId}/notes/{date}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ClearNote(Guid habitId, Guid subHabitId, DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        await _mediator.Send(new ClearSubHabitNoteCommand(habitId, subHabitId, date), cancellationToken);
+        return NoContent();
     }
 }

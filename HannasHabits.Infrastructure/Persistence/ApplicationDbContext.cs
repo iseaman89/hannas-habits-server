@@ -16,6 +16,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
     public DbSet<HabitRecord> HabitRecords => Set<HabitRecord>();
     public DbSet<SubHabit> SubHabits => Set<SubHabit>();
     public DbSet<SubHabitRecord> SubHabitRecords => Set<SubHabitRecord>();
+    public DbSet<SubHabitNote> SubHabitNotes => Set<SubHabitNote>();
     public DbSet<DailyDiary> DailyDiaries => Set<DailyDiary>();
     public DbSet<Resolution> Resolutions => Set<Resolution>();
     public DbSet<Tag> Tags => Set<Tag>();

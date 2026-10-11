@@ -101,17 +101,19 @@ public class GetHabitsOverviewQueryHandlerTests
     private readonly FakeHabitRepository _repository = new();
     private readonly FakeTagRepository _tags = new();
     private readonly FakeHabitDayEntryRepository _days;
+    private readonly FakeSubHabitNoteRepository _notes;
     private readonly FakeTimeProvider _clock = TestClock.Create();
 
     public GetHabitsOverviewQueryHandlerTests()
     {
         _days = new FakeHabitDayEntryRepository(_repository);
+        _notes = new FakeSubHabitNoteRepository(_repository);
     }
 
     private FakeTagQueries TagQueries() => new(_repository, _tags, _days);
 
     private Task<List<HabitOverviewDto>> Handle(DateOnly? from, DateOnly? to, DateOnly? asOf = null)
-        => new GetHabitsOverviewQueryHandler(new FakeHabitQueries(_repository), TagQueries(), _user, _clock)
+        => new GetHabitsOverviewQueryHandler(new FakeHabitQueries(_repository, _notes), TagQueries(), _user, _clock)
             .Handle(new GetHabitsOverviewQuery(from, to, asOf), CancellationToken.None);
 
     private static DateOnly[] Days(int month, params int[] days) => days.Select(d => new DateOnly(2026, month, d)).ToArray();
@@ -363,12 +365,14 @@ public class GetHabitsOverviewQueryHandlerTests
     [Fact]
     public async Task OnlyTheCurrentUserIsAskedFor()
     {
-        var queries = new FakeHabitQueries(_repository);
+        var queries = new FakeHabitQueries(_repository, _notes);
         var tagQueries = TagQueries();
         await new GetHabitsOverviewQueryHandler(queries, tagQueries, _user, _clock)
             .Handle(new GetHabitsOverviewQuery(Today, Today, null), CancellationToken.None);
 
-        Assert.Equal([_user.UserId], queries.AskedForUsers);
+        // The habits' query and the parts' notes are two reads; both are the current user's.
+        Assert.NotEmpty(queries.AskedForUsers);
+        Assert.All(queries.AskedForUsers, asked => Assert.Equal(_user.UserId, asked));
         Assert.Equal([_user.UserId], tagQueries.AskedForUsers);
     }
 
@@ -438,6 +442,63 @@ public class GetHabitsOverviewQueryHandlerTests
         var item = Assert.Single(await Handle(Today, Today));
 
         Assert.Empty(item.SubHabits);
+    }
+
+    // ---- notes of the parts ----
+
+    [Fact]
+    public async Task SubHabits_CarryTheirNotesOfTheRange_OldestFirst_EachOnItsOwnPart()
+    {
+        var habit = Make.NewHabit(_user.UserId, "Sport", new DateOnly(2026, 9, 1),
+            HabitSchedule.Weekly([DayOfWeek.Monday, DayOfWeek.Thursday]));
+        var legs = habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        var core = habit.AddSubHabit(HabitTitle.Create("Core"), WeekdaySet.Of([DayOfWeek.Thursday]));
+        _repository.Habits.Add(habit);
+        _notes.Notes.Add(SubHabitNote.Create(legs.Id, new DateOnly(2026, 10, 12), "3 x 12"));
+        _notes.Notes.Add(SubHabitNote.Create(legs.Id, new DateOnly(2026, 10, 5), "knee odd"));
+        _notes.Notes.Add(SubHabitNote.Create(core.Id, new DateOnly(2026, 10, 8), "plank 2 min"));
+        _notes.Notes.Add(SubHabitNote.Create(legs.Id, new DateOnly(2026, 9, 28), "before the range"));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Collection(item.SubHabits[0].Notes,
+            note => Assert.Equal((new DateOnly(2026, 10, 5), "knee odd"), (note.Date, note.Text)),
+            note => Assert.Equal((new DateOnly(2026, 10, 12), "3 x 12"), (note.Date, note.Text)));
+        var corePlank = Assert.Single(item.SubHabits[1].Notes);
+        Assert.Equal((new DateOnly(2026, 10, 8), "plank 2 min"), (corePlank.Date, corePlank.Text));
+    }
+
+    [Fact]
+    public async Task ANote_OnADayThePartIsNotDueOn_IsStillCarried()
+    {
+        // A note is independent of the plan: the part was planned on Mondays, the note is on a Tuesday.
+        var habit = Make.NewHabit(_user.UserId, "Sport", new DateOnly(2026, 9, 1));
+        var legs = habit.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        _repository.Habits.Add(habit);
+        _notes.Notes.Add(SubHabitNote.Create(legs.Id, new DateOnly(2026, 10, 6), "stretched instead"));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        var note = Assert.Single(item.SubHabits[0].Notes);
+        Assert.Equal(new DateOnly(2026, 10, 6), note.Date);
+        Assert.DoesNotContain(new DateOnly(2026, 10, 6), item.SubHabits[0].ScheduledDates);
+    }
+
+    [Fact]
+    public async Task NotesOfAnotherUsersParts_AreNotCarried()
+    {
+        var mine = Make.NewHabit(_user.UserId, "Sport", new DateOnly(2026, 9, 1));
+        var myLegs = mine.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        var foreign = Make.NewHabit(Guid.NewGuid(), "Sport", new DateOnly(2026, 9, 1));
+        var foreignLegs = foreign.AddSubHabit(HabitTitle.Create("Legs"), WeekdaySet.Of([DayOfWeek.Monday]));
+        _repository.Habits.Add(mine);
+        _repository.Habits.Add(foreign);
+        _notes.Notes.Add(SubHabitNote.Create(foreignLegs.Id, new DateOnly(2026, 10, 5), "not yours"));
+
+        var item = Assert.Single(await Handle(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)));
+
+        Assert.Equal(myLegs.Id, item.SubHabits[0].Id);
+        Assert.Empty(item.SubHabits[0].Notes);
     }
 
     // ---- tags ----

@@ -1,5 +1,6 @@
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Application.Habits.Recurrence;
+using HannasHabits.Application.SubHabits;
 using HannasHabits.Application.Tags;
 using HannasHabits.Domain.Services;
 using MediatR;
@@ -36,11 +37,16 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
         var taggedDays = (await _tagQueries.GetTaggedDaysAsync(userId, from, to, cancellationToken))
             .ToLookup(row => row.HabitId);
 
-        return habits.Select(habit => ToDto(habit, from, to, asOf, taggedDays[habit.Id])).ToList();
+        // The same for the parts' notes: one query for the range, handed to each part by its id.
+        var notes = (await _habitQueries.GetSubHabitNotesAsync(userId, from, to, cancellationToken))
+            .ToLookup(row => row.SubHabitId);
+
+        return habits.Select(habit => ToDto(habit, from, to, asOf, taggedDays[habit.Id], notes)).ToList();
     }
 
     private static HabitOverviewDto ToDto(
-        HabitWithCompletedDates habit, DateOnly from, DateOnly to, DateOnly asOf, IEnumerable<TaggedDayRow> taggedDays)
+        HabitWithCompletedDates habit, DateOnly from, DateOnly to, DateOnly asOf, IEnumerable<TaggedDayRow> taggedDays,
+        ILookup<Guid, SubHabitNoteRow> notes)
     {
         // The whole history: the streak and a week that reaches out of the range need days outside it.
         var completed = habit.CompletedDates.ToHashSet();
@@ -57,17 +63,19 @@ public class GetHabitsOverviewQueryHandler : IRequestHandler<GetHabitsOverviewQu
                 .Select(progress => new QuotaPeriodDto(progress.Period.From, progress.Period.To, progress.Done))
                 .ToList(),
             HabitStreak.Current(habit.Schedule, habit.StartDate, completed, asOf),
-            habit.SubHabits.Select(subHabit => SubHabitOf(habit, subHabit, from, to)).ToList());
+            habit.SubHabits.Select(subHabit => SubHabitOf(habit, subHabit, from, to, notes[subHabit.Id])).ToList());
     }
 
     private static SubHabitOverviewDto SubHabitOf(
-        HabitWithCompletedDates habit, SubHabitWithCompletedDates subHabit, DateOnly from, DateOnly to)
+        HabitWithCompletedDates habit, SubHabitWithCompletedDates subHabit, DateOnly from, DateOnly to,
+        IEnumerable<SubHabitNoteRow> notes)
         => new(
             subHabit.Id,
             subHabit.Title,
             subHabit.Weekdays.Days,
             HabitDueDays.Between(habit.Schedule, habit.StartDate, subHabit.Weekdays, from, to),
-            subHabit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList());
+            subHabit.CompletedDates.Where(date => date >= from && date <= to).Order().ToList(),
+            notes.OrderBy(row => row.Date).Select(row => new SubHabitNoteDto(row.Date, row.Text)).ToList());
 
     // The rows come ordered by date and tag name; grouping keeps that order.
     private static List<TaggedDayDto> TaggedDaysOf(IEnumerable<TaggedDayRow> rows)

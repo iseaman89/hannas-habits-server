@@ -30,6 +30,13 @@ public interface IHabitQueries
     Task<HabitDayDto?> GetDayAsync(Guid userId, Guid habitId, DateOnly date, CancellationToken cancellationToken);
 
     /// <summary>
+    /// The notes of every part of every habit of the user that lie within the range, oldest first (the day, then the
+    /// order they were written in). The caller groups them by part.
+    /// </summary>
+    Task<List<SubHabitNoteRow>> GetSubHabitNotesAsync(
+        Guid userId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Records of the habit ordered by date, <paramref name="from"/> and <paramref name="to"/> inclusive and optional.
     /// <c>null</c> (not an empty list) if the habit does not exist or belongs to another user.
     /// </summary>

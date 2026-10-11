@@ -88,6 +88,20 @@ public static class Sql
         return id;
     }
 
+    public static async Task<Guid> InsertSubHabitNoteAsync(
+        ApplicationDbContext db, Guid subHabitId, string date, string text = "a note")
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabitNotes" ("Id", "CreatedAt", "SubHabitId", "Date", "Text")
+            VALUES ({id}, {DateTime.UtcNow}, {subHabitId}, {day}, {text})
+            """);
+
+        return id;
+    }
+
     public static async Task<Guid> InsertDiaryAsync(
         ApplicationDbContext db, Guid userId, string date, int? mood = 3, int? body = null, int? mind = null)
     {
