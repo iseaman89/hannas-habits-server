@@ -139,6 +139,12 @@ Authorization: Bearer {{accessToken}}
 GET {{host}}/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf={{date}}
 Authorization: Bearer {{accessToken}}
 
+### Statistics for the month: per habit and per part what was planned and done, and when it was last done - 200
+# planned = the due days up to asOf (asOf itself only once it is done); a quota counts weeks / months that ended in the
+# range (unit: days | weeks | months). lastDoneOn reaches outside the range. from/to required, at most 366 days apart.
+GET {{host}}/api/habits/statistics?from=2026-10-01&to=2026-10-31&asOf={{date}}
+Authorization: Bearer {{accessToken}}
+
 ### Get one habit
 GET {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}

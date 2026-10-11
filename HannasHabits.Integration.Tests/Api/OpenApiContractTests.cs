@@ -154,6 +154,13 @@ public class OpenApiContractTests
         var overview = await user.Client.GetAsync("/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
         await AssertFitsAsync(contract, "GET", "/api/habits/overview", overview, HttpStatusCode.OK);
         Assert.Equal(2, (await overview.ReadJsonAsync()).GetArrayLength()); // the check above was not run on an empty list
+
+        // With a part, so the nested schema is checked against a real answer as well.
+        await user.AddSubHabitAsync(habitId, "Chapter", 1, 3, 5);
+        var statistics = await user.Client.GetAsync("/api/habits/statistics?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
+        await AssertFitsAsync(contract, "GET", "/api/habits/statistics", statistics, HttpStatusCode.OK);
+        var first = (await statistics.ReadJsonAsync()).EnumerateArray().First(item => item.GetProperty("id").GetGuid() == habitId);
+        Assert.Single(first.GetProperty("subHabits").EnumerateArray());
     }
 
     [Fact]
@@ -166,7 +173,9 @@ public class OpenApiContractTests
             new { kind = "weekly", weekdays = new[] { 1, 4 }, interval = 2, anchor = "2026-10-05" },
             new { kind = "everyNDays", interval = 3, anchor = "2026-10-10" },
             new { kind = "monthlyOnWeekday", occurrence = "last", weekday = 6 },
-            new { kind = "monthlyOnDate", dayOfMonth = 31 }
+            new { kind = "monthlyOnDate", dayOfMonth = 31 },
+            new { kind = "timesPerWeek", times = 3 },
+            new { kind = "timesPerMonth", times = 8 }
         ];
 
         foreach (var (rule, index) in rules.Select((rule, index) => (rule, index)))
@@ -181,6 +190,11 @@ public class OpenApiContractTests
         var overview = await user.Client.GetAsync("/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
         await AssertFitsAsync(contract, "GET", "/api/habits/overview", overview, HttpStatusCode.OK);
         Assert.Equal(rules.Length, (await overview.ReadJsonAsync()).GetArrayLength());
+
+        // Days for the rules with due days, weeks and months for the two quotas.
+        var statistics = await user.Client.GetAsync("/api/habits/statistics?from=2026-10-01&to=2026-10-31&asOf=2026-10-08");
+        await AssertFitsAsync(contract, "GET", "/api/habits/statistics", statistics, HttpStatusCode.OK);
+        Assert.Equal(rules.Length, (await statistics.ReadJsonAsync()).GetArrayLength());
     }
 
     [Fact]

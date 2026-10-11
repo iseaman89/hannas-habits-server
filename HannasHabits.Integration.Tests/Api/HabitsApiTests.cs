@@ -387,6 +387,7 @@ public class HabitsApiTests
         { "GET", "/api/habits" },
         { "POST", "/api/habits" },
         { "GET", "/api/habits/overview?from=2026-10-01&to=2026-10-31" },
+        { "GET", "/api/habits/statistics?from=2026-10-01&to=2026-10-31" },
         { "GET", "/api/habits/00000000-0000-0000-0000-000000000001" },
         { "PUT", "/api/habits/00000000-0000-0000-0000-000000000001" },
         { "DELETE", "/api/habits/00000000-0000-0000-0000-000000000001" },

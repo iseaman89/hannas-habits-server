@@ -22,10 +22,12 @@ public static class DependencyInjection
         services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
             .AddJsonOptions(options =>
             {
-                // The kind of a recurrence rule reads as a word ("weekly", "last"), not as a number. Only these two enums:
-                // a global string converter would also turn Mood and DayOfWeek, which the contract keeps numeric, into text.
+                // The kind of a recurrence rule reads as a word ("weekly", "last"), not as a number, and so does what a
+                // statistic counts ("days", "weeks"). Only these enums: a global string converter would also turn Mood
+                // and DayOfWeek, which the contract keeps numeric, into text.
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<ScheduleKind>(JsonNamingPolicy.CamelCase));
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<WeekdayOccurrence>(JsonNamingPolicy.CamelCase));
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<CountingUnit>(JsonNamingPolicy.CamelCase));
             });
 
         services.AddProblemDetails();
