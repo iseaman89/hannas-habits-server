@@ -850,3 +850,16 @@ The user, after seeing (7): on the habit's cell, a day whose sub-habits have no 
 2. **The known limit (d) of entry (7) is gone** (the card on every hover of a habit with parts, names only).
 
 **Verified:** frontend typecheck, lint (0), format, build green; **1,465 tests** (1,462; +3: two cases of "no card" and "once a note was written"; the "names without a note" cases were turned into their opposite). Two mutants (every part listed with or without a note; a card for any habit with parts) killed. Not run against the real API: nothing new is asked of it. Nothing was looked at in a browser.
+
+## 2026-10-12 (1) - The calendar as a rectangle (frontend only)
+
+The user: the year calendar should be built as a rectangle - 4 × 3 on a wide screen, 3 × 4 on a smaller one, then 2 × 6 and 1 × 12.
+
+**Done** (frontend `dev`, `CalendarPage.tsx`): the auto-fill grid (min 250 px, any column count, a ragged last row) became `grid-cols-1 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4`; the loading skeleton uses the same classes. DESIGN.md §4.4 and §8 updated.
+
+**Decided / honest notes:**
+1. **Container queries, not screen breakpoints.** From `lg` (1024 px) the 15 rem sidebar takes 240 px of the room, so a screen width says little about the grid's width: a 1000 px window has about 940 px for the grid, a 1030 px one only about 670 px. Screen breakpoints would have needed a column count that goes *down* when the screen grows past `lg`. The grid's wrapper is `@container`; `@lg` / `@3xl` / `@5xl` = 32 / 48 / 64 rem of *its* width. Tailwind 4 has them built in, and the diary already used them.
+2. **Every count divides 12** - never a half-empty row. A card is 238 px at the narrowest step (it was 250): the 24 px day discs keep about 1 px clear of today's ring. Wider than 1024 px of grid it just grows (no cap).
+3. jsdom has no layout: the test pins the classes (twelve children, the four column classes, `@container` on the parent, the skeleton with the same classes).
+
+**Verified:** typecheck, lint (0), format, build green (the emitted CSS has the three `@container (min-width: …)` rules); **1,466 tests** (+1). Not looked at in a browser (the user's decision).
