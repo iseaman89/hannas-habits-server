@@ -11,13 +11,13 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
 {
     public void Configure(EntityTypeBuilder<Habit> builder)
     {
-        // The check constraints mirror the Domain rules ("at least one day", plausible start date) for rows that bypass
-        // the application.
+        // The check constraints mirror the Domain rules ("at least one day", plausible start date, which facts belong to
+        // which kind of schedule) for rows that bypass the application.
         builder.ToTable("Habits", table =>
         {
-            table.HasCheckConstraint(
-                "CK_Habits_Schedule",
-                $"\"Schedule\" BETWEEN {HabitScheduleConverter.MinMask} AND {HabitScheduleConverter.MaxMask}");
+            table.HasCheckConstraint("CK_Habits_ScheduleWeekdays", HabitScheduleColumns.WeekdaysCheck);
+            table.HasCheckConstraint("CK_Habits_ScheduleAnchor", HabitScheduleColumns.AnchorCheck);
+            table.HasCheckConstraint("CK_Habits_ScheduleRule", HabitScheduleColumns.RuleCheck);
 
             table.HasCheckConstraint(
                 "CK_Habits_StartDate",
@@ -37,9 +37,19 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
         builder.Property(h => h.Description)
             .HasMaxLength(Habit.DescriptionMaxLength);
 
-        builder.Property(h => h.Schedule)
-            .HasConversion<HabitScheduleConverter>()
-            .IsRequired();
+        // One schedule over seven flat columns (a complex property: a value without identity, stored in its habit's row).
+        builder.ComplexProperty(h => h.Schedule, schedule =>
+        {
+            schedule.Property(s => s.Kind).HasColumnName(HabitScheduleColumns.Kind);
+            // The weekday set is private in the Domain (it exposes the days); only the bits are stored.
+            schedule.Property<int>("WeekdayMask").HasColumnName(HabitScheduleColumns.Weekdays);
+            schedule.Property(s => s.Interval).HasColumnName(HabitScheduleColumns.Interval);
+            schedule.Property(s => s.Anchor).HasColumnName(HabitScheduleColumns.Anchor);
+            schedule.Property(s => s.Occurrence).HasColumnName(HabitScheduleColumns.Occurrence);
+            schedule.Property(s => s.DayOfMonth).HasColumnName(HabitScheduleColumns.DayOfMonth);
+            schedule.Property(s => s.Times).HasColumnName(HabitScheduleColumns.Times);
+            schedule.Ignore(s => s.Days);
+        });
 
         builder.Property(h => h.StartDate).IsRequired();
         
@@ -53,6 +63,11 @@ public class HabitConfiguration : IEntityTypeConfiguration<Habit>
         builder.HasMany(h => h.Records)
             .WithOne()
             .HasForeignKey(h => h.HabitId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(h => h.SubHabits)
+            .WithOne()
+            .HasForeignKey(s => s.HabitId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

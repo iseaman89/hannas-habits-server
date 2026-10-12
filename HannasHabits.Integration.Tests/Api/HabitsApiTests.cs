@@ -15,6 +15,9 @@ public class HabitsApiTests
 
     private Task<TestUser> NewUser() => TestUser.RegisterAsync(_api);
 
+    private static int[] WeekdaysOf(System.Text.Json.JsonElement habit)
+        => habit.GetProperty("recurrence").GetProperty("weekdays").EnumerateArray().Select(day => day.GetInt32()).ToArray();
+
     // ---- create ----
 
     [Fact]
@@ -24,7 +27,8 @@ public class HabitsApiTests
 
         var response = await user.Client.PostAsync("/api/habits", new
         {
-            title = "Read", description = "20 pages", schedule = new[] { 1, 2, 3 }, startDate = "2026-03-01"
+            title = "Read", description = "20 pages", startDate = "2026-03-01",
+            recurrence = new { kind = "weekly", weekdays = new[] { 1, 2, 3 } }
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -32,7 +36,7 @@ public class HabitsApiTests
         var id = body.GetProperty("id").GetGuid();
         Assert.NotEqual(Guid.Empty, id);
         Assert.Equal("Read", body.GetProperty("title").GetString());
-        Assert.Equal([1, 2, 3], body.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal([1, 2, 3], WeekdaysOf(body));
         Assert.Equal("2026-03-01", body.GetProperty("startDate").GetString());
         Assert.EndsWith($"/api/habits/{id}", response.Headers.Location!.ToString());
     }
@@ -54,7 +58,7 @@ public class HabitsApiTests
     }
 
     [Fact]
-    public async Task Create_WithoutAScheduleThehabitIsPlannedEveryDay_WithoutAStartDateItStartsToday()
+    public async Task Create_WithoutARecurrenceTheHabitIsDueEveryDay_WithoutAStartDateItStartsToday()
     {
         var user = await NewUser();
         var utcToday = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -62,19 +66,23 @@ public class HabitsApiTests
         var response = await user.Client.PostAsync("/api/habits", new { title = "Read" });
         var body = await response.ReadJsonAsync();
 
-        Assert.Equal([0, 1, 2, 3, 4, 5, 6], body.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal("weekly", body.GetProperty("recurrence").GetProperty("kind").GetString());
+        Assert.Equal([0, 1, 2, 3, 4, 5, 6], WeekdaysOf(body));
         var start = DateOnly.Parse(body.GetProperty("startDate").GetString()!);
         Assert.InRange(start.DayNumber, utcToday.DayNumber - 1, utcToday.DayNumber + 1); // a midnight may pass during the test
     }
 
     [Fact]
-    public async Task Create_TheScheduleIsReturnedSortedAndWithoutDuplicates()
+    public async Task Create_TheWeekdaysAreReturnedSortedAndWithoutDuplicates()
     {
         var user = await NewUser();
 
-        var response = await user.Client.PostAsync("/api/habits", new { title = "Run", schedule = new[] { 5, 1, 5, 6 } });
+        var response = await user.Client.PostAsync(
+            "/api/habits", new { title = "Run", recurrence = new { kind = "weekly", weekdays = new[] { 5, 1, 5, 6 } } });
 
-        Assert.Equal([1, 5, 6], (await response.ReadJsonAsync()).GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        var body = await response.ReadJsonAsync();
+
+        Assert.Equal([1, 5, 6], WeekdaysOf(body));
     }
 
     [Fact]
@@ -118,17 +126,19 @@ public class HabitsApiTests
     }
 
     [Fact]
-    public async Task Create_ABadSchedule_IsA400_AtTheRightPosition()
+    public async Task Create_ABadRecurrence_IsA400_AtTheRightPosition()
     {
         var user = await NewUser();
 
-        var empty = await user.Client.PostAsync("/api/habits", new { title = "Read", schedule = Array.Empty<int>() });
-        var outOfRange = await user.Client.PostAsync("/api/habits", new { title = "Read", schedule = new[] { 1, 7 } });
+        var empty = await user.Client.PostAsync(
+            "/api/habits", new { title = "Read", recurrence = new { kind = "weekly", weekdays = Array.Empty<int>() } });
+        var outOfRange = await user.Client.PostAsync(
+            "/api/habits", new { title = "Read", recurrence = new { kind = "weekly", weekdays = new[] { 1, 7 } } });
 
         Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
-        Assert.Contains("schedule", await empty.ErrorKeysAsync());
+        Assert.Contains("recurrence.weekdays", await empty.ErrorKeysAsync());
         Assert.Equal(HttpStatusCode.BadRequest, outOfRange.StatusCode);
-        Assert.Contains("schedule[1]", await outOfRange.ErrorKeysAsync());
+        Assert.Contains("recurrence.weekdays[1]", await outOfRange.ErrorKeysAsync());
     }
 
     [Theory]
@@ -187,7 +197,7 @@ public class HabitsApiTests
         Assert.Equal(id, habit.GetProperty("id").GetGuid());
         Assert.Equal("Read", habit.GetProperty("title").GetString());
         Assert.Equal("20 pages", habit.GetProperty("description").GetString());
-        Assert.Equal([1, 3], habit.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal([1, 3], WeekdaysOf(habit));
     }
 
     [Fact]
@@ -221,23 +231,63 @@ public class HabitsApiTests
     // ---- update ----
 
     [Fact]
-    public async Task Update_ReplacesTheHabit_ButNotItsStartDate()
+    public async Task Update_WithAStartDate_MovesIt_AndEarlierDaysCanBeBackFilled()
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Read", null, "2026-10-01");
+
+        var update = await user.Client.PutAsync(
+            $"/api/habits/{id}", new
+            {
+                title = "Read", startDate = "2026-09-01",
+                recurrence = new { kind = "weekly", weekdays = new[] { 0, 1, 2, 3, 4, 5, 6 } }
+            });
+
+        Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
+        var body = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        Assert.Equal("2026-09-01", body.GetProperty("startDate").GetString());
+        await user.MarkAsync(id, "2026-09-10"); // a day before the old start: still stored
+    }
+
+    [Theory]
+    [InlineData("1999-12-31")]
+    [InlineData("2101-01-01")]
+    public async Task Update_AStartDateOutOfRange_IsA400_AndChangesNothing(string startDate)
+    {
+        var user = await NewUser();
+        var id = await user.CreateHabitAsync("Read", [1], "2026-03-01");
+
+        var response = await user.Client.PutAsync(
+            $"/api/habits/{id}", new { title = "Run", recurrence = new { kind = "weekly", weekdays = new[] { 2 } }, startDate });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("startDate", await response.ErrorKeysAsync());
+        var body = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
+        Assert.Equal("Read", body.GetProperty("title").GetString());
+        Assert.Equal("2026-03-01", body.GetProperty("startDate").GetString());
+    }
+
+    [Fact]
+    public async Task Update_WithoutAStartDate_ReplacesTheHabit_ButKeepsItsStartDate()
     {
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read", [1], "2026-03-01", "old");
 
-        var update = await user.Client.PutAsync($"/api/habits/{id}", new { title = " Run ", description = "new", schedule = new[] { 6, 0 } });
+        var update = await user.Client.PutAsync($"/api/habits/{id}", new
+        {
+            title = " Run ", description = "new", recurrence = new { kind = "weekly", weekdays = new[] { 6, 0 } }
+        });
 
         Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
         var body = await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync();
         Assert.Equal("Run", body.GetProperty("title").GetString());
         Assert.Equal("new", body.GetProperty("description").GetString());
-        Assert.Equal([0, 6], body.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal([0, 6], WeekdaysOf(body));
         Assert.Equal("2026-03-01", body.GetProperty("startDate").GetString());
     }
 
     [Fact]
-    public async Task Update_TheScheduleIsRequired_AnUpdateReplacesTheWholeHabit()
+    public async Task Update_TheRuleIsRequired_AnUpdateReplacesTheWholeHabit()
     {
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read", [1]);
@@ -245,7 +295,7 @@ public class HabitsApiTests
         var response = await user.Client.PutAsync($"/api/habits/{id}", new { title = "Run" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("schedule", await response.ErrorKeysAsync());
+        Assert.Contains("recurrence", await response.ErrorKeysAsync());
         Assert.Equal("Read", (await (await user.Client.GetAsync($"/api/habits/{id}")).ReadJsonAsync()).GetProperty("title").GetString());
     }
 
@@ -255,7 +305,8 @@ public class HabitsApiTests
         var user = await NewUser();
         var id = await user.CreateHabitAsync("Read", [1]);
 
-        var response = await user.Client.PutAsync($"/api/habits/{id}", new { title = " ", schedule = new[] { 2 } });
+        var response = await user.Client.PutAsync(
+            $"/api/habits/{id}", new { title = " ", recurrence = new { kind = "weekly", weekdays = new[] { 2 } } });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("title", await response.ErrorKeysAsync());
@@ -266,7 +317,8 @@ public class HabitsApiTests
     {
         var user = await NewUser();
 
-        var response = await user.Client.PutAsync($"/api/habits/{Guid.NewGuid()}", new { title = "Run", schedule = new[] { 2 } });
+        var response = await user.Client.PutAsync(
+            $"/api/habits/{Guid.NewGuid()}", new { title = "Run", recurrence = new { kind = "weekly", weekdays = new[] { 2 } } });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -299,7 +351,8 @@ public class HabitsApiTests
 
         // Everything answers exactly like "no such habit".
         Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.GetAsync($"/api/habits/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.PutAsync($"/api/habits/{id}", new { title = "Hacked", schedule = new[] { 1 } })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.PutAsync(
+            $"/api/habits/{id}", new { title = "Hacked", recurrence = new { kind = "weekly", weekdays = new[] { 1 } } })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.DeleteAsync($"/api/habits/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.GetAsync($"/api/habits/{id}/records")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await intruder.Client.PutAsync($"/api/habits/{id}/records/2026-10-09")).StatusCode);
@@ -334,6 +387,7 @@ public class HabitsApiTests
         { "GET", "/api/habits" },
         { "POST", "/api/habits" },
         { "GET", "/api/habits/overview?from=2026-10-01&to=2026-10-31" },
+        { "GET", "/api/habits/statistics?from=2026-10-01&to=2026-10-31" },
         { "GET", "/api/habits/00000000-0000-0000-0000-000000000001" },
         { "PUT", "/api/habits/00000000-0000-0000-0000-000000000001" },
         { "DELETE", "/api/habits/00000000-0000-0000-0000-000000000001" },

@@ -25,16 +25,26 @@ public static class Sql
         return id;
     }
 
+    /// <summary>
+    /// A habit through plain SQL, so the check constraints are what is tested. <paramref name="schedule"/> is the weekday
+    /// bit set (127 = every day); without the other schedule columns the habit is "weekly, every week". <paramref name="times"/> is the count of a quota kind (4, 5).
+    /// </summary>
     public static async Task<Guid> InsertHabitAsync(
         ApplicationDbContext db, Guid userId, string title = "Habit", int schedule = 127,
-        string startDate = "2026-01-01", DateTime? createdAt = null)
+        string startDate = "2026-01-01", DateTime? createdAt = null,
+        int kind = 0, int interval = 1, string? anchor = null, int? occurrence = null, int? dayOfMonth = null,
+        int? times = null)
     {
         var id = Guid.NewGuid();
         var start = DateOnly.Parse(startDate);
+        DateOnly? anchorDate = anchor is null ? null : DateOnly.Parse(anchor);
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Habits" ("Id", "CreatedAt", "UserId", "Title", "Schedule", "StartDate")
-            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {userId}, {title}, {schedule}, {start})
+            INSERT INTO "Habits" ("Id", "CreatedAt", "UserId", "Title", "StartDate",
+                                  "ScheduleKind", "ScheduleWeekdays", "ScheduleInterval", "ScheduleAnchor",
+                                  "ScheduleOccurrence", "ScheduleDayOfMonth", "ScheduleTimes")
+            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {userId}, {title}, {start},
+                    {kind}, {schedule}, {interval}, {anchorDate}, {occurrence}, {dayOfMonth}, {times})
             """);
 
         return id;
@@ -47,6 +57,46 @@ public static class Sql
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "HabitRecords" ("Id", "CreatedAt", "HabitId", "Date") VALUES ({id}, {DateTime.UtcNow}, {habitId}, {day})
+            """);
+
+        return id;
+    }
+
+    /// <summary>A sub-habit through plain SQL; <paramref name="weekdays"/> is the weekday bit set (Sunday = bit 0).</summary>
+    public static async Task<Guid> InsertSubHabitAsync(
+        ApplicationDbContext db, Guid habitId, string title = "Part", int weekdays = 127, DateTime? createdAt = null)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabits" ("Id", "CreatedAt", "HabitId", "Title", "Weekdays")
+            VALUES ({id}, {createdAt ?? DateTime.UtcNow}, {habitId}, {title}, {weekdays})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertSubHabitRecordAsync(ApplicationDbContext db, Guid subHabitId, string date)
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabitRecords" ("Id", "CreatedAt", "SubHabitId", "Date") VALUES ({id}, {DateTime.UtcNow}, {subHabitId}, {day})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertSubHabitNoteAsync(
+        ApplicationDbContext db, Guid subHabitId, string date, string text = "a note")
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SubHabitNotes" ("Id", "CreatedAt", "SubHabitId", "Date", "Text")
+            VALUES ({id}, {DateTime.UtcNow}, {subHabitId}, {day}, {text})
             """);
 
         return id;
@@ -74,6 +124,42 @@ public static class Sql
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Resolutions" ("Id", "CreatedAt", "UserId", "Year", "Title", "Kept", "HabitId")
             VALUES ({id}, {DateTime.UtcNow}, {userId}, {year}, {title}, false, {habitId})
+            """);
+
+        return id;
+    }
+
+    /// <summary>A tag through plain SQL; <c>NameKey</c> is what the Domain would compute (the upper-cased name).</summary>
+    public static async Task<Guid> InsertTagAsync(ApplicationDbContext db, Guid userId, string name = "krank", string? nameKey = null)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Tags" ("Id", "CreatedAt", "UserId", "Name", "NameKey")
+            VALUES ({id}, {DateTime.UtcNow}, {userId}, {name}, {nameKey ?? name.ToUpperInvariant()})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertDayEntryAsync(ApplicationDbContext db, Guid habitId, string date)
+    {
+        var id = Guid.NewGuid();
+        var day = DateOnly.Parse(date);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HabitDayEntries" ("Id", "CreatedAt", "HabitId", "Date") VALUES ({id}, {DateTime.UtcNow}, {habitId}, {day})
+            """);
+
+        return id;
+    }
+
+    public static async Task<Guid> InsertDayTagAsync(ApplicationDbContext db, Guid entryId, Guid tagId)
+    {
+        var id = Guid.NewGuid();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "HabitDayTags" ("Id", "CreatedAt", "HabitDayEntryId", "TagId") VALUES ({id}, {DateTime.UtcNow}, {entryId}, {tagId})
             """);
 
         return id;

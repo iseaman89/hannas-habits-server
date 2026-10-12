@@ -3,6 +3,7 @@ using HannasHabits.Application.Habits.Commands.DeleteHabit;
 using HannasHabits.Application.Habits.Queries.GetAllHabits;
 using HannasHabits.Application.Habits.Queries.GetHabitById;
 using HannasHabits.Application.Habits.Queries.GetHabitsOverview;
+using HannasHabits.Application.Habits.Queries.GetHabitsStatistics;
 using HannasHabits.WebApi.Models;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -45,6 +46,22 @@ public class HabitsController : ControllerBase
     {
         var overview = await _mediator.Send(new GetHabitsOverviewQuery(from, to, asOf), cancellationToken);
         return Ok(overview);
+    }
+
+    /// <summary>
+    /// How much of every habit (and of each of its parts) was planned and done between <c>from</c> and <c>to</c>
+    /// (inclusive, both required) as of <c>asOf</c> - the caller's local today; omitted = the server's UTC date - and
+    /// when it was last done.
+    /// </summary>
+    [HttpGet("statistics")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<HabitStatisticsDto>>> GetStatistics(
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] DateOnly? asOf,
+        CancellationToken cancellationToken)
+    {
+        var statistics = await _mediator.Send(new GetHabitsStatisticsQuery(from, to, asOf), cancellationToken);
+        return Ok(statistics);
     }
 
     [HttpGet("{id}")]

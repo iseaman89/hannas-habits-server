@@ -2,9 +2,16 @@ using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Application.DailyDiaries;
 using HannasHabits.Application.DailyDiaries.Commands.SaveDailyDiary;
+using HannasHabits.Application.HabitDays.Commands.AttachTag;
+using HannasHabits.Application.HabitDays.Commands.DetachTag;
 using HannasHabits.Application.HabitRecords.Commands.MarkCompleted;
 using HannasHabits.Application.HabitRecords.Commands.UnmarkCompleted;
 using HannasHabits.Application.Resolutions.Commands.AddResolution;
+using HannasHabits.Application.SubHabits;
+using HannasHabits.Application.SubHabits.Commands.MarkSubHabitCompleted;
+using HannasHabits.Application.SubHabits.Commands.SetSubHabitNote;
+using HannasHabits.Application.Tags;
+using HannasHabits.Application.Tags.Commands.CreateTag;
 using HannasHabits.Domain.Enums;
 using HannasHabits.Infrastructure.Persistence;
 using HannasHabits.Infrastructure.Queries;
@@ -118,6 +125,97 @@ public class RaceTests : IAsyncLifetime
         }
     }
 
+    // ---- sub-habits: the part's tick and the habit's day ----
+
+    private Task<(HabitDayDto? Result, Exception? Failure)> TickPart(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid part)
+        => Race(barrier, units, (db, uow) => new MarkSubHabitCompletedCommandHandler(
+                new HabitRepository(db), new HabitQueries(db), uow, new FakeCurrentUser(_user))
+            .Handle(new MarkSubHabitCompletedCommand(habit, part, Day), default));
+
+    [Fact]
+    public async Task TickingTheSamePartTwiceAtOnce_EndsInOneTick_AndBothCallersGetTheCompletedDay()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => TickPart(barrier, units, habit, legs)),
+                Task.Run(() => TickPart(barrier, units, habit, legs)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.All(results, result => Assert.True(result.Result!.HabitCompleted));        // both see the day done
+            Assert.All(results, result => Assert.Equal([legs], result.Result!.CompletedSubHabitIds));
+            Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs)); // one tick...
+            Assert.Equal(1, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit));      // ...and one day
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);          // the unique index really fired
+        }
+    }
+
+    // KNOWN LIMIT, pinned here so that it is not forgotten: the habit's day follows its parts when a part is ticked,
+    // by looking at the parts this request loaded. Two requests that tick the last two open parts at the same moment
+    // each see the other one still open, neither completes the day, and nothing in the database objects (no unique
+    // index is touched). Both ticks are kept; the habit's day stays open until a tick or the habit's own tick touches
+    // the day again. One person on one device cannot do this (the UI ticks one after the other); it takes two devices
+    // within the same few milliseconds. Closing it would need a row version on the habit or a re-check after the save.
+    [Fact]
+    public async Task TickingTheTwoLastOpenPartsAtOnce_KeepsBothTicks_ButCannotCompleteTheDay()
+    {
+        var habit = await Sql.InsertHabitAsync(_db, _user);
+        var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+        var core = await Sql.InsertSubHabitAsync(_db, habit, "Core");
+        var barrier = new Barrier(2);
+        var units = new List<RaceUnitOfWork>();
+
+        var results = await Task.WhenAll(
+            Task.Run(() => TickPart(barrier, units, habit, legs)),
+            Task.Run(() => TickPart(barrier, units, habit, core)));
+
+        Assert.All(results, result => Assert.Null(result.Failure));
+        Assert.All(units, uow => Assert.Null(uow.SaveFailure));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", legs));
+        Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitRecords", "SubHabitId", core));
+        Assert.Equal(0, await Sql.CountAsync(_db, "HabitRecords", "HabitId", habit)); // the limit
+    }
+
+    // ---- sub-habits: the note of a part on a day ----
+
+    private Task<(SubHabitNoteDto? Result, Exception? Failure)> WriteNote(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid part, string text)
+        => Race(barrier, units, (db, uow) => new SetSubHabitNoteCommandHandler(
+                new HabitRepository(db), new SubHabitNoteRepository(db), uow, new FakeCurrentUser(_user))
+            .Handle(new SetSubHabitNoteCommand(habit, part, Day, text), default));
+
+    [Fact]
+    public async Task WritingTheFirstNoteOfADayTwiceAtOnce_EndsInOneNote_AndNeitherCallerFails()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var legs = await Sql.InsertSubHabitAsync(_db, habit, "Legs");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => WriteNote(barrier, units, habit, legs, "from the phone")),
+                Task.Run(() => WriteNote(barrier, units, habit, legs, "from the laptop")));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.Equal(["from the laptop", "from the phone"], results.Select(r => r.Result!.Text).Order());
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException); // the unique index really fired
+
+            // One note, whole, and it is one of the two texts: the loser's retry went onto the winner's row.
+            Assert.Equal(1, await Sql.CountAsync(_db, "SubHabitNotes", "SubHabitId", legs));
+            Assert.Equal(1, await Sql.ScalarAsync(_db,
+                """SELECT COUNT(*) FROM "SubHabitNotes" WHERE "SubHabitId" = @p0 AND "Text" IN ('from the phone', 'from the laptop')""",
+                legs));
+        }
+    }
+
     // ---- the diary: last write wins, as a whole ----
 
     private static SaveDailyDiaryCommand Entry(string highlight, Mood mood, params string[] grateful)
@@ -217,5 +315,167 @@ public class RaceTests : IAsyncLifetime
         // Without the translation of the foreign key violation this would be a raw DbUpdateException, i.e. a 500.
         Assert.IsAssignableFrom<ConflictException>(failure);
         Assert.Equal(0, await Sql.CountAsync(_db, "Resolutions", "UserId", _user));
+    }
+
+    // ---- tags ----
+
+    /// <summary>One request that must not throw out of the test: its result or the exception it ended with.</summary>
+    private Task<(T? Result, Exception? Failure)> Race<T>(
+        Barrier barrier, List<RaceUnitOfWork> units, Func<ApplicationDbContext, IUnitOfWork, Task<T>> body)
+        => Request(async (_, db) =>
+        {
+            var uow = new RaceUnitOfWork(db, barrier);
+            lock (units) units.Add(uow);
+
+            try
+            {
+                return ((T?)await body(db, uow), (Exception?)null);
+            }
+            catch (Exception exception)
+            {
+                return (default(T), exception);
+            }
+        });
+
+    private Task<(CreateTagResult? Result, Exception? Failure)> CreateTag(
+        Barrier barrier, List<RaceUnitOfWork> units, string name)
+        => Race(barrier, units, (db, uow) => new CreateTagCommandHandler(new TagRepository(db), uow, new FakeCurrentUser(_user))
+            .Handle(new CreateTagCommand(name), default));
+
+    private Task<(TaggedDayDto? Result, Exception? Failure)> Attach(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid tag)
+        => Race(barrier, units, (db, uow) => new AttachTagCommandHandler(
+                new HabitRepository(db), new TagRepository(db), new HabitDayEntryRepository(db), new TagQueries(db), uow,
+                new FakeCurrentUser(_user))
+            .Handle(new AttachTagCommand(habit, Day, tag), default));
+
+    private Task<(TaggedDayDto? Result, Exception? Failure)> Detach(
+        Barrier barrier, List<RaceUnitOfWork> units, Guid habit, Guid tag)
+        => Race(barrier, units, (db, uow) => new DetachTagCommandHandler(
+                new HabitRepository(db), new TagRepository(db), new HabitDayEntryRepository(db), new TagQueries(db), uow,
+                new FakeCurrentUser(_user))
+            .Handle(new DetachTagCommand(habit, Day, tag), default));
+
+    private Task<long> TagRows(Guid habit)
+        => Sql.ScalarAsync(_db, """
+            SELECT COUNT(*) FROM "HabitDayTags" t JOIN "HabitDayEntries" e ON e."Id" = t."HabitDayEntryId" WHERE e."HabitId" = @p0
+            """, habit);
+
+    [Fact]
+    public async Task CreatingTheSameTagTwiceAtOnce_EndsInOneTag_AndBothCallersGetIt()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            // Not even the spelling has to match: the unique index is on the case-folded name.
+            var results = await Task.WhenAll(
+                Task.Run(() => CreateTag(barrier, units, $"Krank {round}")),
+                Task.Run(() => CreateTag(barrier, units, $"KRANK {round}")));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.Equal(results[0].Result!.Tag.Id, results[1].Result!.Tag.Id);               // the same tag for both
+            Assert.Single(results, result => result.Result!.Created);                         // one created it, one found it
+            Assert.Equal(results[0].Result!.Tag.Name, results[1].Result!.Tag.Name);           // and both see ITS spelling
+            Assert.Equal(1, await Sql.ScalarAsync(_db,
+                "SELECT COUNT(*) FROM \"Tags\" WHERE \"UserId\" = @p0 AND \"NameKey\" = @p1", _user, $"KRANK {round}"));
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);          // the unique index really fired
+        }
+    }
+
+    [Fact]
+    public async Task TaggingTheSameNewDayWithTwoTagsAtOnce_EndsInOneEntryWithBothTags()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var first = await Sql.InsertTagAsync(_db, _user, $"first {round}");
+            var second = await Sql.InsertTagAsync(_db, _user, $"second {round}");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => Attach(barrier, units, habit, first)),
+                Task.Run(() => Attach(barrier, units, habit, second)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.Equal(1, await Sql.CountAsync(_db, "HabitDayEntries", "HabitId", habit)); // one entry for the day...
+            Assert.Equal(2, await TagRows(habit));                                            // ...with both tags
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);          // the unique index really fired
+            Assert.Contains(results, result => result.Result!.Tags.Count == 2);               // the loser answers with the whole day
+        }
+    }
+
+    [Fact]
+    public async Task PuttingTheSameTagOnTheSameNewDayTwiceAtOnce_EndsInOneRow_AndBothSucceed()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var tag = await Sql.InsertTagAsync(_db, _user, $"tag {round}");
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => Attach(barrier, units, habit, tag)),
+                Task.Run(() => Attach(barrier, units, habit, tag)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.All(results, result => Assert.Equal([tag], result.Result!.Tags.Select(t => t.Id)));
+            Assert.Equal(1, await TagRows(habit));
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);
+        }
+    }
+
+    [Fact]
+    public async Task PuttingTheSameTagOnAnExistingDayTwiceAtOnce_EndsInOneRow_AndBothSucceed()
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var already = await Sql.InsertTagAsync(_db, _user, $"already {round}");
+            var tag = await Sql.InsertTagAsync(_db, _user, $"tag {round}");
+            await Sql.InsertDayTagAsync(_db, await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08"), already);
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => Attach(barrier, units, habit, tag)),
+                Task.Run(() => Attach(barrier, units, habit, tag)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));
+            Assert.All(results, result => Assert.Equal(2, result.Result!.Tags.Count));
+            Assert.Equal(2, await TagRows(habit));
+            Assert.Equal(1, await Sql.CountAsync(_db, "HabitDayEntries", "HabitId", habit));
+            Assert.Single(units, uow => uow.SaveFailure is DuplicateEntryException);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)] // the day keeps another tag
+    [InlineData(true)]  // the tag is the day's last: the entry goes with it, from both requests
+    public async Task TakingTheSameTagOffTheSameDayTwiceAtOnce_BothSucceed_AndTheDayEndsWithoutIt(bool lastTag)
+    {
+        for (var round = 0; round < Rounds; round++)
+        {
+            var habit = await Sql.InsertHabitAsync(_db, _user);
+            var tag = await Sql.InsertTagAsync(_db, _user, $"tag {round}");
+            var entry = await Sql.InsertDayEntryAsync(_db, habit, "2026-10-08");
+            await Sql.InsertDayTagAsync(_db, entry, tag);
+            if (!lastTag)
+                await Sql.InsertDayTagAsync(_db, entry, await Sql.InsertTagAsync(_db, _user, $"other {round}"));
+            var barrier = new Barrier(2);
+            var units = new List<RaceUnitOfWork>();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => Detach(barrier, units, habit, tag)),
+                Task.Run(() => Detach(barrier, units, habit, tag)));
+
+            Assert.All(results, result => Assert.Null(result.Failure));                       // the second one is not told off
+            Assert.Single(units, uow => uow.SaveFailure is ConflictException);                // 0 rows deleted: it really raced
+            Assert.Equal(lastTag ? 0 : 1, await TagRows(habit));
+            Assert.Equal(lastTag ? 0 : 1, await Sql.CountAsync(_db, "HabitDayEntries", "HabitId", habit));
+        }
     }
 }

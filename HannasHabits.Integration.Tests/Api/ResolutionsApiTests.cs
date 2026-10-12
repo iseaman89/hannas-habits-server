@@ -195,7 +195,7 @@ public class ResolutionsApiTests
         Assert.Equal(habit, added.GetProperty("habitId").GetGuid());
         Assert.Equal("Read every day", added.GetProperty("habitTitle").GetString());
 
-        await user.Client.PutAsync($"/api/habits/{habit}", new { title = "Read daily", schedule = new[] { 1 } });
+        await user.Client.PutAsync($"/api/habits/{habit}", new { title = "Read daily", recurrence = new { kind = "weekly", weekdays = new[] { 1 } } });
 
         var item = Assert.Single((await ListAsync(user)).EnumerateArray());
         Assert.Equal(habit, item.GetProperty("habitId").GetGuid());

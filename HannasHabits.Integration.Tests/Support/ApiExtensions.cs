@@ -6,9 +6,13 @@ namespace HannasHabits.Integration.Tests.Support;
 public static class ApiExtensions
 {
     public static async Task<Guid> CreateHabitAsync(
-        this TestUser user, string title = "Read", int[]? schedule = null, string? startDate = null, string? description = null)
+        this TestUser user, string title = "Read", int[]? weekdays = null, string? startDate = null, string? description = null,
+        object? recurrence = null)
     {
-        var response = await user.Client.PostAsync("/api/habits", new { title, description, schedule, startDate });
+        // `weekdays` is the shorthand for a weekly rule on those days; an explicit `recurrence` wins.
+        recurrence ??= weekdays is null ? null : new { kind = "weekly", weekdays };
+
+        var response = await user.Client.PostAsync("/api/habits", new { title, description, startDate, recurrence });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();
@@ -18,6 +22,56 @@ public static class ApiExtensions
     {
         foreach (var date in dates)
             Assert.Equal(HttpStatusCode.OK, (await user.Client.PutAsync($"/api/habits/{habitId}/records/{date}")).StatusCode);
+    }
+
+    /// <summary>Creates a tag (the call must answer 201) and returns its id.</summary>
+    public static async Task<Guid> CreateTagAsync(this TestUser user, string name = "krank")
+    {
+        var response = await user.Client.PostAsync("/api/tags", new { name });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Puts tags on a day of a habit (every call must answer 200).</summary>
+    public static async Task TagAsync(this TestUser user, Guid habitId, string date, params Guid[] tagIds)
+    {
+        foreach (var tagId in tagIds)
+            Assert.Equal(HttpStatusCode.OK, (await user.Client.PutAsync($"/api/habits/{habitId}/days/{date}/tags/{tagId}")).StatusCode);
+    }
+
+    public static async Task<System.Text.Json.JsonElement> TagsAsync(this TestUser user, Guid? habitId = null)
+    {
+        var response = await user.Client.GetAsync("/api/tags" + (habitId is null ? "" : $"?habitId={habitId}"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.ReadJsonAsync();
+    }
+
+    /// <summary>Adds a sub-habit to a habit (the call must answer 201) and returns its id.</summary>
+    public static async Task<Guid> AddSubHabitAsync(
+        this TestUser user, Guid habitId, string title, params int[] weekdays)
+    {
+        var response = await user.Client.PostAsync($"/api/habits/{habitId}/sub-habits", new { title, weekdays });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return (await response.ReadJsonAsync()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Ticks sub-habits on a day (every call must answer 200) and returns the day after the last tick.</summary>
+    public static async Task<System.Text.Json.JsonElement> TickSubHabitAsync(
+        this TestUser user, Guid habitId, string date, params Guid[] subHabitIds)
+    {
+        System.Text.Json.JsonElement day = default;
+
+        foreach (var subHabitId in subHabitIds)
+        {
+            var response = await user.Client.PutAsync($"/api/habits/{habitId}/sub-habits/{subHabitId}/records/{date}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            day = await response.ReadJsonAsync();
+        }
+
+        return day;
     }
 
     public static string[] Days(int year, int month, params int[] days)

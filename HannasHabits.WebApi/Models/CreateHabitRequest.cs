@@ -2,12 +2,16 @@ using HannasHabits.Application.Habits.Commands.CreateHabit;
 
 namespace HannasHabits.WebApi.Models;
 
-/// <param name="Schedule">Planned days of the week (0 = Sunday ... 6 = Saturday); omitted = every day.</param>
 /// <param name="StartDate">First day the habit applies (yyyy-MM-dd, the caller's local date); omitted = today.</param>
-public record CreateHabitRequest(string Title, string? Description, List<DayOfWeek>? Schedule, DateOnly? StartDate)
+/// <param name="Recurrence">The rule that decides on which days the habit is due; omitted = every day.</param>
+public record CreateHabitRequest(
+    string Title, string? Description, DateOnly? StartDate, RecurrenceRequest? Recurrence = null)
 {
     public CreateHabitCommand ToCommand() => new()
     {
-        Title = Title, Description = Description, Schedule = Schedule, StartDate = StartDate
+        Title = Title,
+        Description = Description,
+        StartDate = StartDate,
+        Recurrence = Recurrence?.ToInput()
     };
 }

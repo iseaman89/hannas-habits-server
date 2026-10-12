@@ -1,8 +1,11 @@
 using HannasHabits.Application.Auth;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Application.DailyDiaries;
+using HannasHabits.Application.HabitDays;
 using HannasHabits.Application.Habits;
 using HannasHabits.Application.Resolutions;
+using HannasHabits.Application.SubHabits;
+using HannasHabits.Application.Tags;
 using HannasHabits.Infrastructure.Identity;
 using HannasHabits.Infrastructure.Persistence;
 using HannasHabits.Infrastructure.Queries;
@@ -66,11 +69,15 @@ public static class DependencyInjection
         // The DbContext is the unit of work: one instance per request, shared by repositories and queries.
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IHabitRepository, HabitRepository>();
+        services.AddScoped<ISubHabitNoteRepository, SubHabitNoteRepository>();
         services.AddScoped<IDailyDiaryRepository, DailyDiaryRepository>();
         services.AddScoped<IResolutionRepository, ResolutionRepository>();
+        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<IHabitDayEntryRepository, HabitDayEntryRepository>();
         services.AddScoped<IHabitQueries, HabitQueries>();
         services.AddScoped<IDailyDiaryQueries, DailyDiaryQueries>();
         services.AddScoped<IResolutionQueries, ResolutionQueries>();
+        services.AddScoped<ITagQueries, TagQueries>();
 
         services.AddHttpContextAccessor();
 

@@ -253,7 +253,7 @@ public class HabitOverviewApiTests
         var item = Assert.Single(overview.EnumerateArray());
         Assert.Equal(habit, item.GetProperty("id").GetGuid());
         Assert.Equal("Read", item.GetProperty("title").GetString());
-        Assert.Equal([1, 2, 3, 4, 5], item.GetProperty("schedule").EnumerateArray().Select(day => day.GetInt32()));
+        Assert.Equal([1, 2, 3, 4, 5], item.GetProperty("recurrence").GetProperty("weekdays").EnumerateArray().Select(day => day.GetInt32()));
         Assert.Equal("2026-09-01", item.GetProperty("startDate").GetString());
         Assert.Equal(["2026-10-05", "2026-10-06", "2026-10-07"], item.GetProperty("completedDates").EnumerateArray().Select(d => d.GetString()));
         Assert.Equal(3, item.GetProperty("currentStreak").GetInt32()); // Thursday 8th is still open
@@ -295,8 +295,9 @@ public class HabitOverviewApiTests
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         await user.MarkAsync(habit, today.ToString("yyyy-MM-dd"), today.AddDays(-1).ToString("yyyy-MM-dd"));
 
-        var item = Assert.Single((await user.OverviewAsync("2020-01-01", "2099-12-31")).EnumerateArray());
+        var item = Assert.Single((await user.OverviewAsync("2020-01-01", "2020-12-31")).EnumerateArray());
 
+        // The range is a year in the past, the streak is as of today: it does not depend on the range.
         Assert.InRange(item.GetProperty("currentStreak").GetInt32(), 1, 2); // a midnight may pass during the test
     }
 
@@ -334,7 +335,8 @@ public class HabitOverviewApiTests
         await user.MarkAsync(habit, "2026-10-06", "2026-10-07"); // Tue + Wed
         Assert.Equal(2, Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "2026-10-08")).EnumerateArray()).GetProperty("currentStreak").GetInt32());
 
-        await user.Client.PutAsync($"/api/habits/{habit}", new { title = "Gym", schedule = new[] { 6, 0 } }); // weekends only
+        await user.Client.PutAsync(
+            $"/api/habits/{habit}", new { title = "Gym", recurrence = new { kind = "weekly", weekdays = new[] { 6, 0 } } }); // weekends only
 
         // Tue + Wed are no longer planned days, so they do not count - and no planned day has been missed either.
         Assert.Equal(0, Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "2026-10-08")).EnumerateArray()).GetProperty("currentStreak").GetInt32());
@@ -373,7 +375,29 @@ public class HabitOverviewApiTests
         var user = await NewUser();
         await user.CreateHabitAsync("Read", startDate: "2026-10-01");
 
-        Assert.Single((await user.OverviewAsync("0001-01-01", "9999-12-31", "9999-12-31")).EnumerateArray());
-        Assert.Single((await user.OverviewAsync("0001-01-01", "9999-12-31", "0001-01-01")).EnumerateArray());
+        Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "9999-12-31")).EnumerateArray());
+        Assert.Single((await user.OverviewAsync("2026-10-01", "2026-10-31", "0001-01-01")).EnumerateArray());
+        Assert.Single((await user.OverviewAsync("9999-12-31", "9999-12-31", "9999-12-31")).EnumerateArray());
+        Assert.Single((await user.OverviewAsync("0001-01-01", "0001-01-01", "0001-01-01")).EnumerateArray());
+    }
+
+    // ---- the range is bounded: every due day of it is listed for every habit ----
+
+    [Theory]
+    [InlineData("2026-01-01", "2026-12-31", true)]   // 365 days
+    [InlineData("2028-01-01", "2028-12-31", true)]   // 366 days: a leap year is the longest
+    [InlineData("2027-01-01", "2027-12-31", true)]
+    [InlineData("2027-01-01", "2028-01-01", true)]   // 366 days, both ends counted
+    [InlineData("2027-01-01", "2028-01-02", false)]  // 367 days
+    [InlineData("0001-01-01", "9999-12-31", false)]
+    public async Task TheRange_IsAtMostALeapYear(string from, string to, bool accepted)
+    {
+        var user = await NewUser();
+
+        var response = await user.Client.GetAsync($"/api/habits/overview?from={from}&to={to}");
+
+        Assert.Equal(accepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest, response.StatusCode);
+        if (!accepted)
+            Assert.Contains("to", await response.ErrorKeysAsync());
     }
 }

@@ -59,39 +59,108 @@ Content-Type: application/json
 %}
 
 ### Create a habit - 201 + Location header
-# schedule = planned days of the week (0 = Sunday ... 6 = Saturday); omit it for "every day".
+# recurrence = the rule that decides on which days the habit is due; omit it for "every day". kind is one of
+#   weekly            weekdays (0 = Sunday ... 6 = Saturday), interval = every N weeks (1..52, default 1)
+#   everyNDays        interval (2..365), counted from anchor
+#   monthlyOnWeekday  occurrence (first | second | third | fourth | last) + weekday
+#   monthlyOnDate     dayOfMonth (1..31; a month without that date uses its last day)
+#   timesPerWeek      times (1..7) in every calendar week (Monday to Sunday), on any days - no due day
+#   timesPerMonth     times (1..28) in every calendar month, on any days - no due day
+# anchor = the day the rhythm counts from (every N weeks with N > 1, every N days); omitted = the start date.
 # startDate = first day the habit applies (yyyy-MM-dd, your local date; 2000-01-01 .. 2100-12-31); omit it for "today".
 POST {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "title": "Read 20 pages", "description": "Before bed", "schedule": [1, 2, 3, 4, 5], "startDate": "{{date}}" }
+{
+  "title": "Read 20 pages",
+  "description": "Before bed",
+  "recurrence": { "kind": "weekly", "weekdays": [1, 2, 3, 4, 5] },
+  "startDate": "{{date}}"
+}
 
 > {%
     client.global.set("habitId", response.body.id);
 %}
 
+### Create a habit that repeats every second week - 201
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Gym",
+  "recurrence": { "kind": "weekly", "weekdays": [1, 4], "interval": 2, "anchor": "{{date}}" },
+  "startDate": "{{date}}"
+}
+
+### Create a habit for the last Saturday of the month - 201
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Clean the flat", "recurrence": { "kind": "monthlyOnWeekday", "occurrence": "last", "weekday": 6 } }
+
+### Create a habit for the 15th of every month - 201
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Pay the rent", "recurrence": { "kind": "monthlyOnDate", "dayOfMonth": 15 } }
+
+### Create a habit that repeats every 3 days - 201
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Water the plants", "recurrence": { "kind": "everyNDays", "interval": 3 } }
+
+### Create a habit with a quota: 3 times a week, on any days - 201
+# No day is due: any day can be ticked and counts. The overview's quotaPeriods say how far each week is, and the streak
+# counts the weeks (timesPerMonth: months) that reached the count.
+POST {{host}}/api/habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Go to the gym", "recurrence": { "kind": "timesPerWeek", "times": 3 } }
+
 ### List habits
 GET {{host}}/api/habits
 Authorization: Bearer {{accessToken}}
 
-### Habit overview for the month grid / the "today" panel - 200
-# One call instead of 1 + N: per habit its plan, startDate, the completed days between from and to (inclusive, both
-# required, oldest first) and currentStreak as of asOf (= your local today; omitted = the server's UTC date).
-# The streak counts scheduled days in a row back from asOf, independent of from/to (it can span months).
+### Habit overview for the month grid / the "today" panel - 200 (each habit also carries taggedDays: [{ date, tags }] of the range)
+# One call instead of 1 + N: per habit its recurrence rule, startDate, scheduledDates (the days between from and to
+# the habit is due on: the rule applied, none before startDate), the completed days between from and to (inclusive,
+# both required, at most 366 days apart, oldest first) and currentStreak as of asOf (= your local today; omitted =
+# the server's UTC date). The streak counts due days in a row back from asOf, independent of from/to (it can span months).
+# For a quota rule (timesPerWeek / timesPerMonth) every day from startDate is listed in scheduledDates (any day can be
+# ticked), quotaPeriods lists each week/month that touches the range as { from, to, done } - counted over the whole
+# period - and the streak counts weeks/months in a row that reached the count (the running one is skipped while open).
 GET {{host}}/api/habits/overview?from=2026-10-01&to=2026-10-31&asOf={{date}}
+Authorization: Bearer {{accessToken}}
+
+### Statistics for the month: per habit and per part what was planned and done, and when it was last done - 200
+# planned = the due days up to asOf (asOf itself only once it is done); a quota counts weeks / months that ended in the
+# range (unit: days | weeks | months). lastDoneOn reaches outside the range. from/to required, at most 366 days apart.
+# currentStreak / longestStreak (in `unit`; a part's in days) are as of asOf over the whole history, not the range.
+GET {{host}}/api/habits/statistics?from=2026-10-01&to=2026-10-31&asOf={{date}}
 Authorization: Bearer {{accessToken}}
 
 ### Get one habit
 GET {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 
-### Update a habit - 204 (replaces title, description and schedule; the schedule is required here)
+### Update a habit - 204 (replaces title, description and rule; the recurrence is required here)
+# Send back the anchor the habit has to keep its rhythm: moving startDate must not shift it. startDate omitted = unchanged.
 PUT {{host}}/api/habits/{{habitId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
-{ "title": "Read 30 pages", "description": "Before bed", "schedule": [0, 1, 2, 3, 4, 5, 6] }
+{
+  "title": "Read 30 pages",
+  "description": "Before bed",
+  "recurrence": { "kind": "weekly", "weekdays": [0, 1, 2, 3, 4, 5, 6] }
+}
 
 ### Mark a day as completed - 200; repeating it returns the same record (idempotent)
 PUT {{host}}/api/habits/{{habitId}}/records/{{date}}
@@ -103,6 +172,91 @@ Authorization: Bearer {{accessToken}}
 
 ### Unmark a day - 204 (404 if the day was not marked)
 DELETE {{host}}/api/habits/{{habitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Create a tag - 201 with { id, name }. Idempotent by name, ignoring case: an existing tag answers 200 with that tag.
+# A tag belongs to the user, not to a habit; at most 200 per user, name at most 30 characters (trimmed).
+POST {{host}}/api/tags
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "krank" }
+
+> {%
+    client.global.set("tagId", response.body.id);
+%}
+
+### List the tags with their use - 200 [{ id, name, useCount, habitUseCount, lastUsedOn }]
+# With habitId the habit's own days come first (for suggestions while typing); habitUseCount is 0 without it.
+GET {{host}}/api/tags?habitId={{habitId}}
+Authorization: Bearer {{accessToken}}
+
+### Put the tag on a day of the habit - 200 with the day's tags { date, tags: [{ id, name }] }. Idempotent; at most 10 per day.
+# Independent of the completion mark: a missed day can be tagged.
+PUT {{host}}/api/habits/{{habitId}}/days/{{date}}/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+
+### Take the tag off the day - 200 with the day's tags. Idempotent: a tag the day does not have is no error.
+DELETE {{host}}/api/habits/{{habitId}}/days/{{date}}/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+
+### Rename a tag - 200 { id, name, merged }. A name another tag already has (ignoring case) MERGES the two:
+### the days go to the other tag, this tag is gone, merged = true and id is the surviving tag's id.
+PUT {{host}}/api/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "Erkältet" }
+
+### Delete a tag - 200 { removedFromDays }; it comes off every day it was on (a day that held only this tag is gone).
+DELETE {{host}}/api/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+
+### Add a sub-habit ("Legs" of "Sport") - 201 with { id, title, weekdays }. At most 10 per habit; the title is unique per habit
+### (ignoring case); weekdays are 0 = Sunday ... 6 = Saturday and must be days the habit itself is planned on (400 detail otherwise).
+# A sub-habit is due where the habit is due AND the weekday is one of its own - a later change of the habit's rhythm carries it along.
+POST {{host}}/api/habits/{{habitId}}/sub-habits
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Legs", "weekdays": [1, 5] }
+
+> {%
+    client.global.set("subHabitId", response.body.id);
+%}
+
+### Rename / move a sub-habit - 200 { id, title, weekdays }. Its ticks stay.
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "title": "Legs & glutes", "weekdays": [1] }
+
+### Tick a sub-habit on a day - 200 { date, habitCompleted, completedSubHabitIds }. Idempotent.
+# The habit's day follows: when this was the last of the day's due sub-habits, habitCompleted is true (and the habit has a record that day).
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Take the tick back - 200 with the day after the call. Idempotent. A day that was done because all its due parts were is not done any more.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/records/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Write the note of a sub-habit on a day - 200 { date, text }. One note per part and day; a second write replaces the text.
+# Independent of the tick (a missed day can carry one) and of the plan (any day within 2000-01-01..2100-12-31, like a tick).
+# Free text, trimmed at the ends, at most 500 characters; blank or missing is a 400 on `text` (take a note away with DELETE).
+# The overview carries it on its part: subHabits[].notes = [{ date, text }] (the range, oldest first).
+PUT {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/notes/{{date}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "text": "3 x 10, left knee felt odd" }
+
+### Take the note away - 204. Idempotent: a day without a note is no error.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}/notes/{{date}}
+Authorization: Bearer {{accessToken}}
+
+### Remove a sub-habit with all its ticks and notes - 204. The habit's own days stay as they are.
+DELETE {{host}}/api/habits/{{habitId}}/sub-habits/{{subHabitId}}
 Authorization: Bearer {{accessToken}}
 
 ### Delete the habit (its records go with it) - 204

@@ -78,6 +78,22 @@ public class DesignRuleTests
             type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ICollection<>));
     }
 
+    [Fact]
+    public void TheAggregateExposesItsSubHabitsAndTheirRecordsOnlyAsAReadOnlyView()
+    {
+        var views = new[]
+        {
+            typeof(Domain.Entities.Habit).GetProperty(nameof(Domain.Entities.Habit.SubHabits))!,
+            typeof(Domain.Entities.SubHabit).GetProperty(nameof(Domain.Entities.SubHabit.Records))!
+        };
+
+        foreach (var view in views)
+        {
+            Assert.DoesNotContain(view.PropertyType.GetInterfaces().Append(view.PropertyType),
+                type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ICollection<>));
+        }
+    }
+
     private static bool IsInitOnly(MethodInfo setter) => setter.ReturnParameter
         .GetRequiredCustomModifiers()
         .Contains(typeof(System.Runtime.CompilerServices.IsExternalInit));

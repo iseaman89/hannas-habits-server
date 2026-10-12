@@ -7,54 +7,6 @@ namespace HannasHabits.Integration.Tests.Persistence;
 // How the Domain's value objects look in the database - and that a damaged value fails loudly instead of loading as garbage.
 public class ConverterTests
 {
-    private static readonly DayOfWeek[] AllDays = Enum.GetValues<DayOfWeek>();
-
-    // ---- HabitSchedule <-> integer bit mask ----
-
-    [Fact]
-    public void Schedule_EveryMaskFrom1To127_RoundTrips()
-    {
-        for (var mask = HabitScheduleConverter.MinMask; mask <= HabitScheduleConverter.MaxMask; mask++)
-        {
-            var schedule = HabitScheduleConverter.FromMask(mask);
-
-            Assert.Equal(mask, HabitScheduleConverter.ToMask(schedule));
-            Assert.All(AllDays, day => Assert.Equal((mask & (1 << (int)day)) != 0, schedule.IncludesDay(day)));
-        }
-    }
-
-    [Theory]
-    [InlineData(127, new[] { 0, 1, 2, 3, 4, 5, 6 })]       // every day
-    [InlineData(62, new[] { 1, 2, 3, 4, 5 })]              // Monday to Friday
-    [InlineData(65, new[] { 0, 6 })]                       // Sunday + Saturday
-    [InlineData(1, new[] { 0 })]                           // Sunday only: bit 0
-    public void Schedule_TheStoredNumberIsOneBitPerDay_SundayIsBitZero(int mask, int[] days)
-    {
-        var schedule = HabitSchedule.Create(days.Select(d => (DayOfWeek)d));
-
-        Assert.Equal(mask, HabitScheduleConverter.ToMask(schedule));
-        Assert.Equal(schedule, HabitScheduleConverter.FromMask(mask));
-    }
-
-    [Theory]
-    [InlineData(0)]     // no day at all
-    [InlineData(128)]   // only a bit beyond Saturday
-    [InlineData(129)]   // Sunday plus a bit that would be dropped silently
-    [InlineData(-1)]
-    [InlineData(int.MaxValue)]
-    public void Schedule_ADamagedRow_FailsLoudly(int mask)
-    {
-        Assert.Throws<DomainException>(() => HabitScheduleConverter.FromMask(mask));
-    }
-
-    [Fact]
-    public void Schedule_TheConverterAndTheCheckConstraintShareTheirLimits()
-    {
-        Assert.Equal(1, HabitScheduleConverter.MinMask);
-        Assert.Equal(127, HabitScheduleConverter.MaxMask);
-        Assert.Equal(HabitScheduleConverter.MaxMask, HabitScheduleConverter.ToMask(HabitSchedule.Daily));
-    }
-
     // ---- tasks <-> JSON ----
 
     [Fact]
@@ -142,6 +94,26 @@ public class ConverterTests
 
         Assert.True(comparer.Equals(one, [DiaryTask.Create("a", false)]));
         Assert.False(comparer.Equals(one, [DiaryTask.Create("a", true)])); // ticking a task off is a change
+    }
+
+    // ---- tag names ----
+
+    [Fact]
+    public void TagNames_AreStoredAsTheirPlainText_InTheSpellingTheyWereChosenIn()
+    {
+        var converter = new TagNameConverter();
+
+        Assert.Equal("Krank", converter.ConvertToProvider(TagName.Create("  Krank ")));
+        Assert.Equal(TagName.Create("Krank"), converter.ConvertFromProvider("Krank"));
+    }
+
+    [Fact]
+    public void TagNames_ADamagedRowFailsLoudly()
+    {
+        var converter = new TagNameConverter();
+
+        Assert.Throws<DomainException>(() => converter.ConvertFromProvider("   "));
+        Assert.Throws<DomainException>(() => converter.ConvertFromProvider(new string('a', TagName.MaxLength + 1)));
     }
 
     // ---- the plain ones ----

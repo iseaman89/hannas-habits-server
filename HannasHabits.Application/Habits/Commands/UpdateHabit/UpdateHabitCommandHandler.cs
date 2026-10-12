@@ -1,6 +1,7 @@
 using HannasHabits.Application.Common.Exceptions;
 using HannasHabits.Application.Common.Interfaces;
 using HannasHabits.Domain.Entities;
+using HannasHabits.Domain.Exceptions;
 using HannasHabits.Domain.ValueObjects;
 using MediatR;
 
@@ -26,7 +27,14 @@ public class UpdateHabitCommandHandler : IRequestHandler<UpdateHabitCommand, Uni
         if (habit is null)
             throw new NotFoundException(nameof(Habit), request.Id);
 
-        habit.Update(HabitTitle.Create(request.Title), request.Description, HabitSchedule.Create(request.Schedule));
+        // A rule that counts from a day, sent without one, counts from the start date the habit has after this update.
+        var startDate = request.StartDate ?? habit.StartDate;
+
+        // The validator has already asked for the rule; the Domain error is for a caller that skipped it.
+        var schedule = request.Recurrence?.ToSchedule(startDate)
+                       ?? throw new DomainException("A habit needs a recurrence rule.");
+
+        habit.Update(HabitTitle.Create(request.Title), request.Description, schedule, request.StartDate);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

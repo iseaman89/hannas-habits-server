@@ -17,7 +17,7 @@ public class HabitTests
     [Fact]
     public void Create_SetsTheGivenValues()
     {
-        var schedule = HabitSchedule.Create([DayOfWeek.Monday]);
+        var schedule = HabitSchedule.Weekly([DayOfWeek.Monday]);
 
         var habit = Habit.Create(UserId, HabitTitle.Create("Read"), Start, "20 pages", schedule);
 
@@ -118,13 +118,50 @@ public class HabitTests
     public void Update_ReplacesTitleDescriptionAndSchedule_ButNotTheStartDate()
     {
         var habit = NewHabit("Read", "old", HabitSchedule.Daily);
-        var schedule = HabitSchedule.Create([DayOfWeek.Saturday, DayOfWeek.Sunday]);
+        var schedule = HabitSchedule.Weekly([DayOfWeek.Saturday, DayOfWeek.Sunday]);
 
         habit.Update(HabitTitle.Create("Run"), "new", schedule);
 
         Assert.Equal("Run", habit.Title.Value);
         Assert.Equal("new", habit.Description);
         Assert.Equal(schedule, habit.Schedule);
+        Assert.Equal(Start, habit.StartDate);
+    }
+
+    [Fact]
+    public void Update_WithAStartDate_MovesIt()
+    {
+        var habit = NewHabit();
+        var earlier = Start.AddMonths(-2);
+
+        habit.Update(habit.Title, habit.Description, habit.Schedule, earlier);
+
+        Assert.Equal(earlier, habit.StartDate);
+    }
+
+    [Fact]
+    public void Update_MovingTheStartDateForward_KeepsTheRecordsBeforeIt()
+    {
+        var habit = NewHabit();
+        habit.MarkCompleted(Start);
+
+        habit.Update(habit.Title, habit.Description, habit.Schedule, Start.AddDays(10));
+
+        Assert.NotNull(habit.RecordOn(Start));
+    }
+
+    [Theory]
+    [InlineData("1999-12-31")]
+    [InlineData("2101-01-01")]
+    public void Update_AStartDateOutOfRange_IsRejected_AndChangesNothing(string startDate)
+    {
+        var habit = NewHabit("Read", "old");
+
+        Assert.Throws<DomainException>(() =>
+            habit.Update(HabitTitle.Create("Run"), "new", habit.Schedule, DateOnly.Parse(startDate)));
+
+        Assert.Equal("Read", habit.Title.Value);
+        Assert.Equal("old", habit.Description);
         Assert.Equal(Start, habit.StartDate);
     }
 
@@ -145,7 +182,7 @@ public class HabitTests
         var tooLong = new string('a', Habit.DescriptionMaxLength + 1);
 
         Assert.Throws<DomainException>(() =>
-            habit.Update(HabitTitle.Create("Run"), tooLong, HabitSchedule.Create([DayOfWeek.Monday])));
+            habit.Update(HabitTitle.Create("Run"), tooLong, HabitSchedule.Weekly([DayOfWeek.Monday])));
 
         Assert.Equal("Read", habit.Title.Value);
         Assert.Equal("old", habit.Description);

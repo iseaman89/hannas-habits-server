@@ -1,4 +1,5 @@
 using FluentValidation;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Domain.Entities;
 using HannasHabits.Domain.ValueObjects;
 
@@ -17,7 +18,14 @@ public class UpdateHabitCommandValidator : AbstractValidator<UpdateHabitCommand>
         RuleFor(x => x.Description)
             .MaximumLength(Habit.DescriptionMaxLength);
 
-        RuleFor(x => x.Schedule).NotEmpty();
-        RuleForEach(x => x.Schedule).IsInEnum();
+        RuleFor(x => x.StartDate)
+            .InclusiveBetween(Habit.MinStartDate, Habit.MaxStartDate)
+            .When(x => x.StartDate.HasValue);
+
+        // An update replaces the whole habit: the rule has to be there.
+        RuleFor(x => x.Recurrence).NotNull();
+
+        // A missing recurrence is skipped by the child validator (the null-forgiving operator only quiets the nullability).
+        RuleFor(x => x.Recurrence!).SetValidator(new RecurrenceInputValidator());
     }
 }

@@ -1,4 +1,5 @@
 using FluentValidation;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Domain.Entities;
 using HannasHabits.Domain.ValueObjects;
 
@@ -20,11 +21,7 @@ public class CreateHabitCommandValidator : AbstractValidator<CreateHabitCommand>
             .InclusiveBetween(Habit.MinStartDate, Habit.MaxStartDate)
             .When(x => x.StartDate.HasValue);
 
-        // No schedule at all means "every day", but an explicitly empty one is a mistake.
-        When(x => x.Schedule is not null, () =>
-        {
-            RuleFor(x => x.Schedule).NotEmpty();
-            RuleForEach(x => x.Schedule).IsInEnum();
-        });
+        // A missing recurrence is skipped by the child validator (the null-forgiving operator only quiets the nullability).
+        RuleFor(x => x.Recurrence!).SetValidator(new RecurrenceInputValidator());
     }
 }

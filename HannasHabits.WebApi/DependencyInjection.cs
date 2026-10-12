@@ -1,4 +1,7 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using HannasHabits.Domain.Enums;
 using HannasHabits.Infrastructure.Identity;
 using HannasHabits.WebApi.ExceptionHandling;
 using HannasHabits.WebApi.OpenApi;
@@ -16,7 +19,16 @@ public static class DependencyInjection
         // FluentValidation (ValidationBehaviour) is the one validation path. Without this switch MVC additionally
         // treats every non-nullable reference property of a request as [Required] and answers a missing property with
         // its own error (key "Title" instead of "title") before the command is even created.
-        services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
+        services.AddControllers(options => options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
+            .AddJsonOptions(options =>
+            {
+                // The kind of a recurrence rule reads as a word ("weekly", "last"), not as a number, and so does what a
+                // statistic counts ("days", "weeks"). Only these enums: a global string converter would also turn Mood
+                // and DayOfWeek, which the contract keeps numeric, into text.
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<ScheduleKind>(JsonNamingPolicy.CamelCase));
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<WeekdayOccurrence>(JsonNamingPolicy.CamelCase));
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter<CountingUnit>(JsonNamingPolicy.CamelCase));
+            });
 
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();

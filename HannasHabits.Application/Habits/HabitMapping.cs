@@ -1,4 +1,5 @@
 using HannasHabits.Application.Habits.Commands.CreateHabit;
+using HannasHabits.Application.Habits.Recurrence;
 using HannasHabits.Domain.Entities;
 using Mapster;
 
@@ -11,6 +12,6 @@ public class HabitMapping : IRegister
         // Title and Schedule are value objects; the DTO carries their plain values.
         config.NewConfig<Habit, CreateHabitDto>()
             .Map(dto => dto.Title, habit => habit.Title.Value)
-            .Map(dto => dto.Schedule, habit => habit.Schedule.Days);
+            .Map(dto => dto.Recurrence, habit => RecurrenceDto.From(habit.Schedule));
     }
 }
